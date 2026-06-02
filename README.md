@@ -73,3 +73,21 @@ Verify Typescript compilation and build production-ready optimized static files:
 ```bash
 npm run build
 ```
+
+---
+
+## Supabase Authentication Setup
+
+The `/doctor` path is secured using Supabase Auth. To configure:
+
+1. Create a project in [Supabase](https://supabase.com/).
+2. Under project settings, get your API credentials.
+3. Create a `.env.local` file in the root of the project with:
+   ```env
+   NEXT_PUBLIC_SUPABASE_URL=your-supabase-project-url
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+   ```
+4. Configure Email/Password auth in the Supabase Dashboard under Authentication -> Providers.
+5. Create a doctor account or use the SQL editor to insert users.
+6. Visiting `/doctor` redirects unauthenticated visitors to `/doctor/login`. Log in using your email and password.
+
