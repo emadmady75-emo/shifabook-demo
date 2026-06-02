@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import StatsDashboard from '@/components/doctor/StatsDashboard';
@@ -8,10 +8,108 @@ import ScheduleBuilder from '@/components/doctor/ScheduleBuilder';
 import AppointmentsList from '@/components/doctor/AppointmentsList';
 import { useBooking } from '@/components/BookingContext';
 
+const DEMO_PASSWORD = 'doctor123';
+const SESSION_KEY = 'shifabook_doctor_access';
+
 export default function DoctorDashboard() {
   const { language, doctorProfile } = useBooking();
   const isAr = language === 'ar';
 
+  const [authenticated, setAuthenticated] = useState(false);
+  const [checking, setChecking] = useState(true);
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (sessionStorage.getItem(SESSION_KEY) === 'true') {
+      setAuthenticated(true);
+    }
+    setChecking(false);
+  }, []);
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (password === DEMO_PASSWORD) {
+      sessionStorage.setItem(SESSION_KEY, 'true');
+      setAuthenticated(true);
+    } else {
+      setError(isAr ? 'كلمة المرور غير صحيحة' : 'Incorrect password');
+    }
+  };
+
+  // Don't render anything while checking sessionStorage (prevents flash)
+  if (checking) {
+    return (
+      <div className="min-h-screen bg-[#050b0f] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-teal-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  // Password gate
+  if (!authenticated) {
+    return (
+      <div className="min-h-screen bg-[#050b0f] flex items-center justify-center px-4">
+        <div className="w-full max-w-sm glass-panel rounded-3xl p-8 border border-teal-500/20 text-right space-y-6">
+
+          {/* Lock icon */}
+          <div className="w-14 h-14 rounded-2xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400 mx-auto">
+            <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </div>
+
+          <div className="text-center space-y-1">
+            <h2 className="text-xl font-black text-white">
+              {isAr ? 'لوحة تحكم الطبيب' : 'Doctor Dashboard'}
+            </h2>
+            <p className="text-xs text-slate-400">
+              {isAr ? 'أدخل كلمة المرور للمتابعة' : 'Enter password to continue'}
+            </p>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-4">
+            {error && (
+              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs font-bold text-rose-400 text-center">
+                {error}
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-300 block">
+                {isAr ? 'كلمة مرور لوحة الطبيب' : 'Dashboard Password'}
+              </label>
+              <input
+                type="password"
+                autoFocus
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full px-4 py-3 rounded-xl bg-[#09151e] border border-teal-950/60 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-teal-500 text-sm transition-colors text-center tracking-widest"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-3.5 rounded-xl bg-gradient-to-tr from-teal-500 to-emerald-400 text-[#070e12] font-black text-sm hover:scale-[1.01] active:scale-[0.99] transition-all shadow-md shadow-teal-500/10"
+            >
+              {isAr ? 'دخول لوحة الطبيب' : 'Enter Dashboard'}
+            </button>
+          </form>
+
+          <p className="text-[10px] text-slate-600 text-center leading-relaxed">
+            {isAr
+              ? 'هذه حماية تجريبية للعرض فقط وليست نظام تسجيل دخول حقيقي.'
+              : 'This is a demo-only gate and not a real authentication system.'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Authenticated — render full dashboard
   return (
     <>
       <Navbar />
