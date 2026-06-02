@@ -29,11 +29,8 @@ export default function DoctorLogin() {
     });
 
     if (signInError) {
-      setError(
-        isAr
-          ? 'بريد إلكتروني أو كلمة مرور غير صحيحة'
-          : signInError.message
-      );
+      console.error('Supabase auth error:', signInError);
+      setError(signInError.message);
       setLoading(false);
     } else {
       router.refresh();
