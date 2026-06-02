@@ -137,6 +137,7 @@ export default function HeroSection() {
                   </p>
                   <p className="text-xs text-slate-400">
                     {isAr ? doctorProfile.hospital : doctorProfile.hospitalEn}
+                    {doctorProfile.city ? ` - ${doctorProfile.city}` : ''}
                   </p>
                 </div>
               </div>
@@ -158,7 +159,7 @@ export default function HeroSection() {
                   <p className="text-[11px] text-slate-400">{isAr ? 'الدفع في العيادة' : 'Pay at clinic'}</p>
                 </div>
                 <div className="text-right">
-                  <span className="text-2xl font-black text-teal-300">500</span>
+                  <span className="text-2xl font-black text-teal-300">{doctorProfile.consultationFee || 400}</span>
                   <span className="text-sm font-bold text-teal-400 mr-1"> {isAr ? 'ج.م' : 'EGP'}</span>
                 </div>
               </div>

@@ -103,6 +103,11 @@ export default function DoctorPublicBookingPage() {
                     {isAr ? doctorProfile.title : doctorProfile.titleEn}
                   </p>
 
+                  <p className="text-xs text-slate-300 font-bold">
+                    {isAr ? doctorProfile.hospital : doctorProfile.hospitalEn}
+                    {doctorProfile.city ? ` - ${doctorProfile.city}` : ''}
+                  </p>
+
                   <p className="text-xs text-slate-400 leading-relaxed max-w-xl">
                     {isAr ? doctorProfile.specialization : doctorProfile.specializationEn}
                   </p>
@@ -112,7 +117,9 @@ export default function DoctorPublicBookingPage() {
               {/* Consultation details badge */}
               <div className="w-full md:w-auto p-5 rounded-2xl bg-teal-950/20 border border-teal-900/40 text-center space-y-2">
                 <span className="text-xs text-slate-400 block">{isAr ? 'قيمة الكشف بالعيادة' : 'Clinic Consult Rate'}</span>
-                <span className="text-2xl font-black text-white block">250 ر.س</span>
+                <span className="text-2xl font-black text-white block">
+                  {doctorProfile.consultationFee || 400} {isAr ? 'ج.م' : 'EGP'}
+                </span>
                 <span className="text-[10px] text-slate-500 block">
                   {isAr ? 'تأكيد الحجز فوري عبر الواتساب' : 'WhatsApp Confirmed'}
                 </span>

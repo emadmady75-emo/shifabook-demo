@@ -7,6 +7,7 @@ import Footer from '@/components/Footer';
 import StatsDashboard from '@/components/doctor/StatsDashboard';
 import ScheduleBuilder from '@/components/doctor/ScheduleBuilder';
 import AppointmentsList from '@/components/doctor/AppointmentsList';
+import ProfileSettings from '@/components/doctor/ProfileSettings';
 import { useBooking } from '@/components/BookingContext';
 import { createClient } from '@/lib/supabase/client';
 import { SupabaseDoctor } from './page';
@@ -99,9 +100,10 @@ export default function DoctorDashboardClient({ doctor }: DoctorDashboardClientP
           {/* 2. Main Administration & Configuration Grid */}
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
             
-            {/* Left Column: Weekly Schedule Configuration Builder Form */}
-            <div className="xl:col-span-4 xl:sticky xl:top-24">
+            {/* Left Column: Weekly Schedule Configuration Builder Form & Profile Settings */}
+            <div className="xl:col-span-4 xl:sticky xl:top-24 space-y-8 max-h-[calc(100vh-8rem)] overflow-y-auto custom-scrollbar pr-1">
               <ScheduleBuilder />
+              <ProfileSettings doctor={doctor} language={language} />
             </div>
 
             {/* Right Column: Active Appointments Data Ledger & Live Webhooks Hub */}

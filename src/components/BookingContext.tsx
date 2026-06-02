@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
@@ -51,6 +51,8 @@ export interface DoctorProfile {
   avatar: string;
   hospital: string;
   hospitalEn: string;
+  consultationFee?: number;
+  city?: string;
 }
 
 interface BookingContextType {
@@ -146,10 +148,39 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [whatsappEvents, setWhatsappEvents] = useState<WhatsAppEvent[]>([]);
   const [activeBookingId, setActiveBookingId] = useState<string | null>(null);
   const [language, setLanguage] = useState<'ar' | 'en'>('ar');
+  const [doctorProfile, setDoctorProfile] = useState<DoctorProfile>(INITIAL_DOCTOR);
   const [isHydrated, setIsHydrated] = useState(false);
 
   // Load from localStorage on mount
   useEffect(() => {
+    // Fetch doctor profile from Supabase on mount
+    const fetchProfile = async () => {
+      try {
+        const { createClient } = await import('@/lib/supabase/client');
+        const supabase = createClient();
+        const { data, error } = await supabase.from('doctors').select('*').limit(1);
+        if (!error && data && data.length > 0) {
+          const doc = data[0];
+          setDoctorProfile({
+            name: doc.full_name,
+            nameEn: doc.full_name,
+            title: doc.specialization,
+            titleEn: doc.specialization,
+            specialization: doc.specialization,
+            specializationEn: doc.specialization,
+            avatar: INITIAL_DOCTOR.avatar,
+            hospital: doc.clinic_name,
+            hospitalEn: doc.clinic_name,
+            consultationFee: doc.consultation_fee,
+            city: doc.city,
+          });
+        }
+      } catch (err) {
+        console.error('Error fetching doctor profile in BookingProvider:', err);
+      }
+    };
+    fetchProfile();
+
     const storedBookings = localStorage.getItem('shifabook_bookings');
     const storedConfig = localStorage.getItem('shifabook_config');
     const storedActiveId = localStorage.getItem('shifabook_active_booking');
@@ -430,7 +461,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         bookings,
         scheduleConfig,
         whatsappEvents,
-        doctorProfile: INITIAL_DOCTOR,
+        doctorProfile,
         activeBookingId,
         language,
         setLanguage: (lang) => {
