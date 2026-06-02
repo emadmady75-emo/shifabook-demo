@@ -53,13 +53,17 @@ export default function BookingModal({
       return;
     }
     
-    // Simple phone regex validation (supporting Arabic/Gulf styles)
-    const phoneRegex = /^(\+?966|0)?5[0-9]{8}$/;
-    if (!phoneRegex.test(phone.replace(/\s+/g, ''))) {
+    // Normalize Egyptian phone: strip spaces/dashes, convert +20/20 prefix to 0
+    let normalizedPhone = phone.replace(/[\s\-]/g, '');
+    if (normalizedPhone.startsWith('+20')) normalizedPhone = '0' + normalizedPhone.slice(3);
+    else if (normalizedPhone.startsWith('20') && normalizedPhone.length === 12) normalizedPhone = '0' + normalizedPhone.slice(2);
+
+    const phoneRegex = /^01[0125][0-9]{8}$/;
+    if (!phoneRegex.test(normalizedPhone)) {
       setError(
         isAr 
-          ? 'رقم الموبايل غير صحيح. يجب أن يبدأ بـ 01 ويحتوي على 11 رقم (مثال: 01023456789)' 
-          : 'Invalid mobile number. Should start with 05 and contain 9 digits (e.g., 0501234567)'
+          ? 'برجاء إدخال رقم موبايل مصري صحيح مثل 01012345678' 
+          : 'Please enter a valid Egyptian mobile number (e.g. 01012345678)'
       );
       return;
     }
@@ -85,7 +89,7 @@ export default function BookingModal({
         }
       } else {
         // Run new booking logic
-        const newBooking = bookAppointment(name, phone, selectedDate, selectedTime);
+        const newBooking = bookAppointment(name, normalizedPhone, selectedDate, selectedTime);
         onSuccess(newBooking);
       }
     } catch (err) {
@@ -176,7 +180,7 @@ export default function BookingModal({
                 type="tel"
                 required
                 disabled={isRescheduling}
-                placeholder="05XXXXXXXX"
+                placeholder="01012345678"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 className="w-full px-4 py-3 rounded-xl bg-[#09151e] border border-teal-950/60 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-teal-500 text-sm transition-colors"
