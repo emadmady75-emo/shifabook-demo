@@ -1,0 +1,94 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Design Tokens ─── */
+:root {
+  --bg-base: #070e12;
+  --bg-card: rgba(11, 23, 31, 0.7);
+  --border-subtle: rgba(20, 184, 166, 0.12);
+  --border-glow: rgba(20, 184, 166, 0.35);
+  --teal-glow-sm: 0 0 15px -3px rgba(20, 184, 166, 0.2);
+  --teal-glow-lg: 0 0 28px 2px rgba(20, 184, 166, 0.35);
+}
+
+body {
+  color: #f8fafc;
+  background-color: var(--bg-base);
+  font-family: var(--font-tajawal), 'Tajawal', ui-sans-serif, system-ui, sans-serif;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Scrollbars ─── */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+.custom-scrollbar::-webkit-scrollbar { height: 5px; width: 5px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: rgba(15, 32, 39, 0.2); }
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(20, 184, 166, 0.18);
+  border-radius: 9999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(20, 184, 166, 0.35);
+}
+
+/* ─── Glassmorphism ─── */
+.glass-panel {
+  background: var(--bg-card);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--border-subtle);
+}
+
+.glass-panel-hover {
+  transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
+}
+.glass-panel-hover:hover {
+  border-color: var(--border-glow);
+  box-shadow: 0 12px 32px -10px rgba(20, 184, 166, 0.15);
+  transform: translateY(-2px);
+}
+
+/* ─── Micro-animations ─── */
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: var(--teal-glow-sm); }
+  50%       { box-shadow: var(--teal-glow-lg); }
+}
+.glow-active { animation: pulseGlow 2.5s ease-in-out infinite; }
+
+/* animate-in utilities (used by Next.js components) */
+@keyframes fadeIn      { from { opacity: 0; } to { opacity: 1; } }
+@keyframes zoomIn95    { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+@keyframes slideInFromTop    { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideInFromBottom { from { opacity: 0; transform: translateY(8px);  } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideInFromRight  { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: translateX(0); } }
+
+.animate-in { animation-fill-mode: both; animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+.fade-in              { animation-name: fadeIn; }
+.zoom-in-95           { animation-name: zoomIn95; }
+.slide-in-from-top-2  { animation-name: slideInFromTop; }
+.slide-in-from-top-4  { animation-name: slideInFromTop; }
+.slide-in-from-bottom-2 { animation-name: slideInFromBottom; }
+.slide-in-from-right-4  { animation-name: slideInFromRight; }
+.duration-200 { animation-duration: 200ms; }
+.duration-300 { animation-duration: 300ms; }
+
+/* ─── Seat slot ─── */
+.seat-slot {
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.seat-slot:not(:disabled):hover {
+  transform: scale(1.05);
+}
+
+/* ─── RTL / LTR font ─── */
+[dir="ltr"] body {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ─── Mobile tap highlight removal ─── */
+* {
+  -webkit-tap-highlight-color: transparent;
+}

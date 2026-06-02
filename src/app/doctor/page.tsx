@@ -1,0 +1,81 @@
+'use client';
+
+import React from 'react';
+import Navbar from '@/components/Navbar';
+import Footer from '@/components/Footer';
+import StatsDashboard from '@/components/doctor/StatsDashboard';
+import ScheduleBuilder from '@/components/doctor/ScheduleBuilder';
+import AppointmentsList from '@/components/doctor/AppointmentsList';
+import { useBooking } from '@/components/BookingContext';
+
+export default function DoctorDashboard() {
+  const { language, doctorProfile } = useBooking();
+  const isAr = language === 'ar';
+
+  return (
+    <>
+      <Navbar />
+
+      <main className="flex-grow bg-[#050b0f] min-h-screen py-8 sm:py-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 sm:space-y-10">
+          
+          {/* Header Panel */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-right border-b border-teal-950/60 pb-6">
+            <div className="space-y-1.5">
+              <p className="text-xs font-bold text-teal-400 uppercase tracking-widest">
+                {new Date().toLocaleDateString(isAr ? 'ar-SA' : 'en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+              </p>
+              <h1 className="text-2xl sm:text-3xl font-black text-white">
+                {isAr ? 'لوحة الأداء والنمو المالي' : 'Clinic Dashboard & Revenue Growth'}
+              </h1>
+              <p className="text-sm text-slate-400 max-w-xl leading-relaxed">
+                {isAr 
+                  ? `مرحباً ${doctorProfile.name}. هذا ملخص أداء عيادتك اليوم، شامل الإيرادات ونسب الإشغال.` 
+                  : `Welcome back, ${doctorProfile.nameEn}. Here is today's clinic summary: revenue, occupancy, and bookings.`}
+              </p>
+            </div>
+            
+            {/* Quick Profile Badge */}
+            <div className="flex items-center gap-3 bg-teal-950/20 border border-teal-900/40 p-3 rounded-2xl flex-shrink-0">
+              <div className="text-right">
+                <span className="text-xs font-black text-white block">
+                  {isAr ? doctorProfile.name : doctorProfile.nameEn}
+                </span>
+                <span className="text-[10px] text-teal-400 block">
+                  {isAr ? 'مدير المنشأة الطبية' : 'Clinic Administrator'}
+                </span>
+              </div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={doctorProfile.avatar}
+                alt="Doctor avatar"
+                className="w-11 h-11 rounded-xl object-cover border border-teal-500/20 flex-shrink-0"
+              />
+            </div>
+          </div>
+
+          {/* 1. Growth/Revenue Analytics Dashboard Widget */}
+          <StatsDashboard />
+
+          {/* 2. Main Administration & Configuration Grid */}
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+            
+            {/* Left Column: Weekly Schedule Configuration Builder Form */}
+            <div className="xl:col-span-4 xl:sticky xl:top-24">
+              <ScheduleBuilder />
+            </div>
+
+            {/* Right Column: Active Appointments Data Ledger & Live Webhooks Hub */}
+            <div className="xl:col-span-8">
+              <AppointmentsList />
+            </div>
+
+          </div>
+
+        </div>
+      </main>
+
+      <Footer />
+    </>
+  );
+}
