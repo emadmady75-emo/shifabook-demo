@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
@@ -10,17 +10,33 @@ import AppointmentsList from '@/components/doctor/AppointmentsList';
 import ProfileSettings from '@/components/doctor/ProfileSettings';
 import { useBooking } from '@/components/BookingContext';
 import { createClient } from '@/lib/supabase/client';
-import { SupabaseDoctor } from './page';
+import { SupabaseDoctor, SupabaseAppointment } from './page';
 
 interface DoctorDashboardClientProps {
   doctor: SupabaseDoctor;
+  initialAppointments: SupabaseAppointment[];
 }
 
-export default function DoctorDashboardClient({ doctor }: DoctorDashboardClientProps) {
-  const { language, doctorProfile } = useBooking();
+export default function DoctorDashboardClient({ doctor, initialAppointments }: DoctorDashboardClientProps) {
+  const { language, doctorProfile, setBookings, setIsLoadingAvailability } = useBooking();
   const isAr = language === 'ar';
   const router = useRouter();
   const supabase = createClient();
+
+  useEffect(() => {
+    const mapped = initialAppointments.map(appt => ({
+      id: appt.id,
+      patientName: appt.patient_name,
+      mobileNumber: appt.patient_phone,
+      date: appt.appointment_date,
+      timeSlot: appt.appointment_time,
+      status: appt.status as any,
+      price: doctor.consultation_fee || 400,
+      createdAt: appt.created_at,
+    }));
+    setBookings(mapped);
+    setIsLoadingAvailability(false);
+  }, [initialAppointments, doctor.consultation_fee, setBookings, setIsLoadingAvailability]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();

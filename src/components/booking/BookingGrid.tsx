@@ -29,10 +29,10 @@ const MoonIcon = () => (
 );
 
 export default function BookingGrid({ selectedDate, selectedTime, onSelectTime }: BookingGridProps) {
-  const { language, generateTimeSlotsForDate, isHydrated } = useBooking();
+  const { language, generateTimeSlotsForDate, isHydrated, isLoadingAvailability } = useBooking();
   const isAr = language === 'ar';
 
-  if (!isHydrated) {
+  if (!isHydrated || isLoadingAvailability) {
     return (
       <div className="space-y-5 text-right animate-pulse">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-teal-950/60 pb-4">

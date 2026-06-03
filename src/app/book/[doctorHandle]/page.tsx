@@ -14,8 +14,14 @@ export default function DoctorPublicBookingPage() {
   const params = useParams();
   const handle = params?.doctorHandle as string;
 
-  const { language, doctorProfile, activeBookingId, bookings } = useBooking();
+  const { language, doctorProfile, activeBookingId, bookings, fetchPublicAvailability } = useBooking();
   const isAr = language === 'ar';
+
+  React.useEffect(() => {
+    if (doctorProfile?.id) {
+      fetchPublicAvailability(doctorProfile.id);
+    }
+  }, [doctorProfile?.id]);
 
   const [selectedDate, setSelectedDate] = useState<string>(
     new Date().toISOString().split('T')[0]

@@ -11,8 +11,14 @@ import RescheduleAlert from '@/components/booking/RescheduleAlert';
 import { useBooking, PatientBooking } from '@/components/BookingContext';
 
 export default function PatientLandingPage() {
-  const { language, activeBookingId } = useBooking();
+  const { language, activeBookingId, doctorProfile, fetchPublicAvailability } = useBooking();
   const isAr = language === 'ar';
+
+  React.useEffect(() => {
+    if (doctorProfile?.id) {
+      fetchPublicAvailability(doctorProfile.id);
+    }
+  }, [doctorProfile?.id]);
 
   const [selectedDate, setSelectedDate] = useState<string>(
     new Date().toISOString().split('T')[0] // default to today

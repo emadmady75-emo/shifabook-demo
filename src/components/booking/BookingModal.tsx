@@ -39,7 +39,7 @@ export default function BookingModal({
     }
   }, [isRescheduling, rescheduleBookingId, bookings]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -73,7 +73,7 @@ export default function BookingModal({
     try {
       if (isRescheduling && rescheduleBookingId) {
         // Run rescheduling logic
-        const moved = rescheduleAppointment(rescheduleBookingId, selectedDate, selectedTime);
+        const moved = await rescheduleAppointment(rescheduleBookingId, selectedDate, selectedTime);
         if (moved) {
           const updatedBooking = bookings.find(b => b.id === rescheduleBookingId);
           if (updatedBooking) {
@@ -89,11 +89,20 @@ export default function BookingModal({
         }
       } else {
         // Run new booking logic
-        const newBooking = bookAppointment(name, normalizedPhone, selectedDate, selectedTime);
+        const newBooking = await bookAppointment(name, normalizedPhone, selectedDate, selectedTime);
         onSuccess(newBooking);
       }
-    } catch (err) {
-      setError(isAr ? 'حدث خطأ أثناء معالجة الطلب.' : 'An error occurred while processing.');
+    } catch (err: any) {
+      const errMsg = err?.message || '';
+      if (errMsg === 'هذا الموعد تم حجزه بالفعل، من فضلك اختر موعدًا آخر') {
+        setError(errMsg);
+      } else {
+        setError(
+          isAr 
+            ? `حدث خطأ أثناء معالجة الطلب: ${errMsg || 'فشل الاتصال بقاعدة البيانات'}` 
+            : `An error occurred: ${errMsg || 'Database connection failed'}`
+        );
+      }
       setLoading(false);
     }
   };

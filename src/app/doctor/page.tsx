@@ -16,6 +16,19 @@ export interface SupabaseDoctor {
   created_at: string;
 }
 
+// Define TS-safe interface for Appointments from Supabase
+export interface SupabaseAppointment {
+  id: string;
+  doctor_id: string;
+  patient_name: string;
+  patient_phone: string;
+  appointment_date: string;
+  appointment_time: string;
+  status: string;
+  source: string;
+  created_at: string;
+}
+
 export default async function DoctorDashboardPage() {
   const supabase = await createClient();
 
@@ -58,5 +71,18 @@ export default async function DoctorDashboardPage() {
     );
   }
 
-  return <DoctorDashboardClient doctor={doctor as SupabaseDoctor} />;
+  // Fetch appointments for this doctor from database
+  const { data: appointments } = await supabase
+    .from('appointments')
+    .select('*')
+    .eq('doctor_id', user.id)
+    .order('appointment_date', { ascending: true })
+    .order('appointment_time', { ascending: true });
+
+  return (
+    <DoctorDashboardClient
+      doctor={doctor as SupabaseDoctor}
+      initialAppointments={(appointments || []) as SupabaseAppointment[]}
+    />
+  );
 }

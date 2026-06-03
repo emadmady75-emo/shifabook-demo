@@ -42,6 +42,7 @@ export interface WhatsAppEvent {
 }
 
 export interface DoctorProfile {
+  id?: string;
   name: string;
   nameEn: string;
   title: string;
@@ -57,20 +58,25 @@ export interface DoctorProfile {
 
 interface BookingContextType {
   bookings: PatientBooking[];
+  setBookings: React.Dispatch<React.SetStateAction<PatientBooking[]>>;
   scheduleConfig: ScheduleConfig;
   whatsappEvents: WhatsAppEvent[];
   doctorProfile: DoctorProfile;
   activeBookingId: string | null;
+  activeBooking: PatientBooking | null;
   language: 'ar' | 'en';
   setLanguage: (lang: 'ar' | 'en') => void;
   updateScheduleConfig: (config: Partial<ScheduleConfig>) => void;
-  bookAppointment: (name: string, phone: string, date: string, time: string) => PatientBooking;
-  rescheduleAppointment: (bookingId: string, newDate: string, newTime: string) => boolean;
-  cancelAppointment: (bookingId: string) => void;
-  confirmAttendance: (bookingId: string) => void;
+  bookAppointment: (name: string, phone: string, date: string, time: string) => Promise<PatientBooking>;
+  rescheduleAppointment: (bookingId: string, newDate: string, newTime: string) => Promise<boolean>;
+  cancelAppointment: (bookingId: string) => Promise<void>;
+  confirmAttendance: (bookingId: string) => Promise<void>;
   triggerMockWhatsAppEvent: (type: WhatsAppEvent['type'], booking: PatientBooking) => void;
   generateTimeSlotsForDate: (dateStr: string) => TimeSlot[];
   isHydrated: boolean;
+  fetchPublicAvailability: (doctorId: string) => Promise<void>;
+  isLoadingAvailability: boolean;
+  setIsLoadingAvailability: (loading: boolean) => void;
 }
 
 const BookingContext = createContext<BookingContextType | undefined>(undefined);
@@ -99,57 +105,17 @@ const DEFAULT_CONFIG: ScheduleConfig = {
 };
 
 // Initial Mock Bookings
-const INITIAL_BOOKINGS: PatientBooking[] = [
-  {
-    id: "appt-1",
-    patientName: "فيصل محمد",
-    mobileNumber: "+966501234567",
-    date: new Date().toISOString().split('T')[0], // Today
-    timeSlot: "09:30",
-    status: "confirmed",
-    price: 500,
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-  },
-  {
-    id: "appt-2",
-    patientName: "سارة عيد الكريم",
-    mobileNumber: "+966539876543",
-    date: new Date().toISOString().split('T')[0], // Today
-    timeSlot: "11:00",
-    status: "confirmed",
-    price: 500,
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString(),
-  },
-  {
-    id: "appt-3",
-    patientName: "محمد خطاب",
-    mobileNumber: "+966555554321",
-    date: new Date().toISOString().split('T')[0], // Today
-    timeSlot: "14:00",
-    status: "pending",
-    price: 500,
-    createdAt: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-  },
-  {
-    id: "appt-4",
-    patientName: "خالد عطالله",
-    mobileNumber: "+966547778899",
-    date: new Date(Date.now() + 86400000).toISOString().split('T')[0], // Tomorrow
-    timeSlot: "10:00",
-    status: "confirmed",
-    price: 500,
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 8).toISOString(),
-  }
-];
+const INITIAL_BOOKINGS: PatientBooking[] = [];
 
 export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [bookings, setBookings] = useState<PatientBooking[]>(INITIAL_BOOKINGS);
   const [scheduleConfig, setScheduleConfig] = useState<ScheduleConfig>(DEFAULT_CONFIG);
-  const [whatsappEvents, setWhatsappEvents] = useState<WhatsAppEvent[]>([]);
   const [activeBookingId, setActiveBookingId] = useState<string | null>(null);
+  const [activeBooking, setActiveBooking] = useState<PatientBooking | null>(null);
   const [language, setLanguage] = useState<'ar' | 'en'>('ar');
   const [doctorProfile, setDoctorProfile] = useState<DoctorProfile>(INITIAL_DOCTOR);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [isLoadingAvailability, setIsLoadingAvailability] = useState(true);
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -162,6 +128,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (!error && data && data.length > 0) {
           const doc = data[0];
           setDoctorProfile({
+            id: doc.id,
             name: doc.full_name,
             nameEn: doc.full_name,
             title: doc.specialization,
@@ -181,53 +148,24 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
     fetchProfile();
 
-    const storedBookings = localStorage.getItem('shifabook_bookings');
+    // Clear legacy shifabook_bookings key
+    localStorage.removeItem('shifabook_bookings');
+
     const storedConfig = localStorage.getItem('shifabook_config');
     const storedActiveId = localStorage.getItem('shifabook_active_booking');
+    const storedActiveBooking = localStorage.getItem('shifabook_active_booking_details');
     const storedLang = localStorage.getItem('shifabook_lang');
-    const storedEvents = localStorage.getItem('shifabook_wa_events');
 
-    if (storedBookings) setBookings(JSON.parse(storedBookings));
     if (storedConfig) setScheduleConfig(JSON.parse(storedConfig));
     if (storedActiveId) setActiveBookingId(storedActiveId);
+    if (storedActiveBooking) setActiveBooking(JSON.parse(storedActiveBooking));
     if (storedLang) setLanguage(storedLang as 'ar' | 'en');
     
-    if (storedEvents) {
-      setWhatsappEvents(JSON.parse(storedEvents));
-    } else {
-      // Seed initial WhatsApp logs
-      const initialLogs: WhatsAppEvent[] = [
-        {
-          id: "wa-1",
-          timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toLocaleTimeString('ar-SA', {hour: '2-digit', minute:'2-digit'}),
-          type: "booking.created",
-          patientName: "فيصل محمد",
-          phone: "+201050553232",
-          message: "تم تسجيل موعدكم بنجاح: اليوم الساعة 09:30 ص. يرجى الرد برقم 1 لتأكيد الحضور.",
-          status: "replied",
-        },
-        {
-          id: "wa-2",
-          timestamp: new Date(Date.now() - 1000 * 60 * 60 * 1.8).toLocaleTimeString('ar-SA', {hour: '2-digit', minute:'2-digit'}),
-          type: "booking.confirmed",
-          patientName: "فيصل محمد",
-          phone: "+201222379779",
-          message: "تأكيد: تم تأكيد موعدكم رسمياً مع د. عبدالله المصري اليوم الساعة 09:30 ص.",
-          status: "delivered",
-        }
-      ];
-      setWhatsappEvents(initialLogs);
-      localStorage.setItem('shifabook_wa_events', JSON.stringify(initialLogs));
-    }
+    // Clear old localStorage orphaned WhatsApp events
+    localStorage.removeItem('shifabook_wa_events');
     
     setIsHydrated(true);
   }, []);
-
-  // Save updates to localStorage
-  const saveBookings = (newBookings: PatientBooking[]) => {
-    setBookings(newBookings);
-    localStorage.setItem('shifabook_bookings', JSON.stringify(newBookings));
-  };
 
   const saveConfig = (newConfig: ScheduleConfig) => {
     setScheduleConfig(newConfig);
@@ -243,96 +181,118 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  const saveEvents = (newEvents: WhatsAppEvent[]) => {
-    setWhatsappEvents(newEvents);
-    localStorage.setItem('shifabook_wa_events', JSON.stringify(newEvents));
-  };
-
   const updateScheduleConfig = (config: Partial<ScheduleConfig>) => {
     const updated = { ...scheduleConfig, ...config };
     saveConfig(updated);
   };
 
-  // Helper: Trigger mock WhatsApp messaging events
+  // Helper: Trigger mock WhatsApp messaging events (no-op as events are derived dynamically)
   const triggerMockWhatsAppEvent = (type: WhatsAppEvent['type'], booking: PatientBooking) => {
-    let message = "";
-    let status: WhatsAppEvent['status'] = "sent";
+    // No-op: derived dynamically from active appointments state
+  };
 
-    const timeString = new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
+  const fetchPublicAvailability = async (doctorId: string) => {
+    setIsLoadingAvailability(true);
+    try {
+      const today = new Date();
+      const startDate = today.toISOString().split('T')[0];
+      const futureDate = new Date();
+      futureDate.setDate(today.getDate() + 30);
+      const endDate = futureDate.toISOString().split('T')[0];
 
-    if (type === 'booking.created') {
-      message = `مرحباً ${booking.patientName}، تم تسجيل حجزك المبدئي بنجاح في ShifaBook مع د. عبدالله المصري بتاريخ ${booking.date} الساعة ${booking.timeSlot}. لتأكيد موعدك فوراً يرجى الرد بـ "1" أو "نعم".`;
-      status = "replied"; // Simulate patient replies instantly for MVP
-    } else if (type === 'booking.confirmed') {
-      message = `رائع! تم تأكيد موعدك رسمياً مع د. عبدالله المصري يوم ${booking.date} في تمام الساعة ${booking.timeSlot}. نتطلع لرؤيتك.`;
-      status = "delivered";
-    } else if (type === 'booking.cancelled') {
-      message = `تنبيه: تم إلغاء موعدك المجدول يوم ${booking.date} الساعة ${booking.timeSlot}. إذا كان هذا عن طريق الخطأ، يمكنك إعادة الحجز مجدداً في أي وقت.`;
-      status = "sent";
-    } else if (type === 'booking.reminder_24h') {
-      message = `تذكير: موعدك مع د. عبدالله المصري غداً يوم ${booking.date} في تمام الساعة ${booking.timeSlot}. يرجى تأكيد حضورك بالرد بـ "1".`;
-      status = "delivered";
-    }
-
-    const newEvent: WhatsAppEvent = {
-      id: `wa-${Date.now()}`,
-      timestamp: timeString,
-      type,
-      patientName: booking.patientName,
-      phone: booking.mobileNumber,
-      message,
-      status,
-    };
-
-    const updatedEvents = [newEvent, ...whatsappEvents].slice(0, 50); // limit to 50 logs
-    saveEvents(updatedEvents);
-
-    // If booking was created, simulate an automated instant confirmation trigger 1.5 seconds later
-    if (type === 'booking.created' && booking.status === 'pending') {
-      setTimeout(() => {
-        // Auto transition booking to confirmed in mock DB
-        const confirmedBooking: PatientBooking = { ...booking, status: 'confirmed' };
-        setBookings(prev => {
-          const next = prev.map(b => b.id === booking.id ? confirmedBooking : b);
-          localStorage.setItem('shifabook_bookings', JSON.stringify(next));
-          return next;
-        });
-        
-        // Push confirmed event to WhatsApp logs
-        const confTime = new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
-        const confEvent: WhatsAppEvent = {
-          id: `wa-${Date.now() + 1}`,
-          timestamp: confTime,
-          type: 'booking.confirmed',
-          patientName: booking.patientName,
-          phone: booking.mobileNumber,
-          message: `رائع! تم تأكيد موعدك رسمياً مع د. عبدالله المصري يوم ${booking.date} في تمام الساعة ${booking.timeSlot}. نتطلع لرؤيتك.`,
-          status: 'read',
-        };
-        setWhatsappEvents(prevEv => {
-          const nextEv = [confEvent, ...prevEv].slice(0, 50);
-          localStorage.setItem('shifabook_wa_events', JSON.stringify(nextEv));
-          return nextEv;
-        });
-      }, 1500);
+      const res = await fetch(`/api/public/availability?doctorId=${doctorId}&start=${startDate}&end=${endDate}`);
+      if (res.ok) {
+        const data = await res.json();
+        const mapped = data.map((appt: any, index: number) => ({
+          id: `public-appt-${index}`,
+          patientName: '',
+          mobileNumber: '',
+          date: appt.appointment_date,
+          timeSlot: appt.appointment_time,
+          status: appt.status as any,
+          price: scheduleConfig.pricePerAppointment,
+          createdAt: new Date().toISOString()
+        }));
+        setBookings(mapped);
+      }
+    } catch (err) {
+      console.error('Error fetching public availability:', err);
+    } finally {
+      setIsLoadingAvailability(false);
     }
   };
 
-  const bookAppointment = (name: string, phone: string, date: string, time: string) => {
+  const bookAppointment = async (name: string, phone: string, date: string, time: string) => {
+    // Use local ID for client-side state and localStorage representation only
+    const finalId = `appt-${Date.now()}`;
+
+    const doctorId = doctorProfile?.id || null;
+    if (!doctorId) {
+      console.error("Verification failed: doctor_id is null or undefined in doctorProfile", doctorProfile);
+    }
+
+    const payload = {
+      doctor_id: doctorId,
+      patient_name: name,
+      patient_phone: phone,
+      appointment_date: date,
+      appointment_time: time,
+      status: 'pending',
+      source: 'web'
+    };
+
+    // Supabase insert if doctor ID is available
+    if (doctorId) {
+      try {
+        const { createClient } = await import('@/lib/supabase/client');
+        const supabase = createClient();
+        
+        const { error } = await supabase
+          .from('appointments')
+          .insert(payload);
+
+        if (error) {
+          if (error.code === '23505') {
+            await fetchPublicAvailability(doctorId);
+            throw new Error("هذا الموعد تم حجزه بالفعل، من فضلك اختر موعدًا آخر");
+          }
+          throw new Error(error.message || "Failed to insert appointment into Supabase");
+        }
+      } catch (err: any) {
+        if (err.message === "هذا الموعد تم حجزه بالفعل، من فضلك اختر موعدًا آخر") {
+          throw err;
+        }
+        if (err?.code === '23505' || err?.message?.includes('23505')) {
+          await fetchPublicAvailability(doctorId);
+          throw new Error("هذا الموعد تم حجزه بالفعل، من فضلك اختر موعدًا آخر");
+        }
+        console.error('Failed to insert appointment:', err);
+        throw err;
+      }
+    } else {
+      throw new Error("No active doctor profile found to book appointment.");
+    }
+
     const newBooking: PatientBooking = {
-      id: `appt-${Date.now()}`,
+      id: finalId,
       patientName: name,
       mobileNumber: phone,
       date,
       timeSlot: time,
-      status: 'pending', // Starts as pending, gets auto-confirmed via WhatsApp trigger simulation
+      status: 'pending',
       price: scheduleConfig.pricePerAppointment,
       createdAt: new Date().toISOString(),
     };
 
-    const nextBookings = [...bookings, newBooking];
-    saveBookings(nextBookings);
+    // Save active booking details for rescheduling banner (separate from grid calculations)
+    localStorage.setItem('shifabook_active_booking_details', JSON.stringify(newBooking));
+    setActiveBooking(newBooking);
     saveActiveId(newBooking.id);
+
+    // Fetch updated public availability to reflect on the grid immediately
+    if (doctorId) {
+      await fetchPublicAvailability(doctorId);
+    }
 
     // Trigger WhatsApp simulator
     triggerMockWhatsAppEvent('booking.created', newBooking);
@@ -340,8 +300,8 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return newBooking;
   };
 
-  const rescheduleAppointment = (bookingId: string, newDate: string, newTime: string) => {
-    const bookingToMove = bookings.find(b => b.id === bookingId);
+  const rescheduleAppointment = async (bookingId: string, newDate: string, newTime: string) => {
+    const bookingToMove = activeBooking && activeBooking.id === bookingId ? activeBooking : bookings.find(b => b.id === bookingId);
     if (!bookingToMove) return false;
 
     // Check if new slot already reached capacity
@@ -351,58 +311,98 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return false; // Slot full
     }
 
-    const updated = bookings.map(b => {
-      if (b.id === bookingId) {
-        return {
-          ...b,
-          date: newDate,
-          timeSlot: newTime,
-          status: 'confirmed' as const,
-        };
-      }
-      return b;
-    });
+    // If it's a Supabase UUID (length is 36)
+    if (bookingId.length === 36) {
+      try {
+        const { createClient } = await import('@/lib/supabase/client');
+        const supabase = createClient();
+        const { error } = await supabase
+          .from('appointments')
+          .update({
+            appointment_date: newDate,
+            appointment_time: newTime,
+            status: 'confirmed'
+          })
+          .eq('id', bookingId);
 
-    saveBookings(updated);
-    
-    // Trigger notification
-    const updatedBooking = updated.find(b => b.id === bookingId)!;
-    triggerMockWhatsAppEvent('booking.confirmed', updatedBooking);
+        if (error) {
+          throw error;
+        }
+      } catch (err) {
+        console.error('Failed to reschedule appointment in Supabase:', err);
+        return false;
+      }
+    }
+
+    const updatedBooking = {
+      ...bookingToMove,
+      date: newDate,
+      timeSlot: newTime,
+      status: 'confirmed' as const,
+    };
+    localStorage.setItem('shifabook_active_booking_details', JSON.stringify(updatedBooking));
+    setActiveBooking(updatedBooking);
+
+    // Refresh public availability
+    const doctorId = doctorProfile?.id;
+    if (doctorId) {
+      await fetchPublicAvailability(doctorId);
+    }
 
     return true;
   };
 
-  const cancelAppointment = (bookingId: string) => {
-    const booking = bookings.find(b => b.id === bookingId);
+  const cancelAppointment = async (bookingId: string) => {
+    const booking = activeBooking && activeBooking.id === bookingId ? activeBooking : bookings.find(b => b.id === bookingId);
     if (!booking) return;
 
-    const updated = bookings.map(b => {
-      if (b.id === bookingId) {
-        return { ...b, status: 'cancelled' as const };
+    // If it's a Supabase UUID
+    if (bookingId.length === 36) {
+      try {
+        const { createClient } = await import('@/lib/supabase/client');
+        const supabase = createClient();
+        await supabase
+          .from('appointments')
+          .update({ status: 'cancelled' })
+          .eq('id', bookingId);
+      } catch (err) {
+        console.error('Failed to cancel appointment in Supabase:', err);
       }
-      return b;
-    });
-    saveBookings(updated);
-
-    if (bookingId === activeBookingId) {
-      saveActiveId(null);
     }
 
-    triggerMockWhatsAppEvent('booking.cancelled', booking);
+    localStorage.removeItem('shifabook_active_booking_details');
+    setActiveBooking(null);
+    saveActiveId(null);
+
+    // Refresh public availability
+    const doctorId = doctorProfile?.id;
+    if (doctorId) {
+      await fetchPublicAvailability(doctorId);
+    }
   };
 
-  const confirmAttendance = (bookingId: string) => {
+  const confirmAttendance = async (bookingId: string) => {
+    // If it's a Supabase UUID
+    if (bookingId.length === 36) {
+      try {
+        const { createClient } = await import('@/lib/supabase/client');
+        const supabase = createClient();
+        await supabase
+          .from('appointments')
+          .update({ status: 'confirmed' })
+          .eq('id', bookingId);
+      } catch (err) {
+        console.error('Failed to confirm attendance in Supabase:', err);
+      }
+    }
+
     const updated = bookings.map(b => {
       if (b.id === bookingId) {
         return { ...b, status: 'confirmed' as const };
       }
       return b;
     });
-    saveBookings(updated);
-    const booking = updated.find(b => b.id === bookingId);
-    if (booking) {
-      triggerMockWhatsAppEvent('booking.confirmed', booking);
-    }
+    setBookings(updated);
   };
 
   // Generate Slots dynamically for a chosen date based on capacity config
@@ -455,14 +455,81 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return slots;
   };
 
+  // Dynamically derive WhatsApp logs from bookings (which reflect the Supabase appointments)
+  const getDerivedWhatsAppEvents = (): WhatsAppEvent[] => {
+    const events: WhatsAppEvent[] = [];
+
+    bookings.forEach(b => {
+      // 1. Created Event
+      const createdTime = new Date(b.createdAt || Date.now()).toLocaleTimeString(language === 'ar' ? 'ar-EG' : 'en-US', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      events.push({
+        id: `wa-created-${b.id}`,
+        timestamp: createdTime,
+        type: 'booking.created',
+        patientName: b.patientName,
+        phone: b.mobileNumber,
+        message: language === 'ar' 
+          ? `مرحباً ${b.patientName}، تم تسجيل حجزك المبدئي بنجاح في شفاء بوك بتاريخ ${b.date} الساعة ${b.timeSlot}. يرجى الرد برقم 1 لتأكيد الحضور.`
+          : `Hello ${b.patientName}, your appointment has been registered on ${b.date} at ${b.timeSlot}. Please reply with 1 to confirm.`,
+        status: b.status === 'pending' ? 'sent' : 'replied'
+      });
+
+      // 2. Confirmed Event (if status is confirmed)
+      if (b.status === 'confirmed') {
+        const confirmedTime = new Date(b.createdAt || Date.now()).toLocaleTimeString(language === 'ar' ? 'ar-EG' : 'en-US', {
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+        events.push({
+          id: `wa-confirmed-${b.id}`,
+          timestamp: confirmedTime,
+          type: 'booking.confirmed',
+          patientName: b.patientName,
+          phone: b.mobileNumber,
+          message: language === 'ar'
+            ? `تأكيد: تم تأكيد موعدكم رسمياً بتاريخ ${b.date} الساعة ${b.timeSlot}. نتطلع لرؤيتك.`
+            : `Confirmed: Your appointment on ${b.date} at ${b.timeSlot} is now confirmed.`,
+          status: 'read'
+        });
+      }
+
+      // 3. Cancelled Event (if status is cancelled)
+      if (b.status === 'cancelled') {
+        const cancelledTime = new Date(b.createdAt || Date.now()).toLocaleTimeString(language === 'ar' ? 'ar-EG' : 'en-US', {
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+        events.push({
+          id: `wa-cancelled-${b.id}`,
+          timestamp: cancelledTime,
+          type: 'booking.cancelled',
+          patientName: b.patientName,
+          phone: b.mobileNumber,
+          message: language === 'ar'
+            ? `تنبيه: تم إلغاء موعدك المجدول بتاريخ ${b.date} الساعة ${b.timeSlot}.`
+            : `Notice: Your scheduled appointment on ${b.date} at ${b.timeSlot} has been cancelled.`,
+          status: 'sent'
+        });
+      }
+    });
+
+    // Sort by id descending so the latest is at the top
+    return events.sort((a, b) => b.id.localeCompare(a.id)).slice(0, 50);
+  };
+
   return (
     <BookingContext.Provider
       value={{
         bookings,
+        setBookings,
         scheduleConfig,
-        whatsappEvents,
+        whatsappEvents: getDerivedWhatsAppEvents(),
         doctorProfile,
         activeBookingId,
+        activeBooking,
         language,
         setLanguage: (lang) => {
           setLanguage(lang);
@@ -476,6 +543,9 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         triggerMockWhatsAppEvent,
         generateTimeSlotsForDate,
         isHydrated,
+        fetchPublicAvailability,
+        isLoadingAvailability,
+        setIsLoadingAvailability,
       }}
     >
       {children}

@@ -9,14 +9,10 @@ interface RescheduleAlertProps {
 }
 
 export default function RescheduleAlert({ onTriggerReschedule, onClear }: RescheduleAlertProps) {
-  const { language, bookings, activeBookingId, cancelAppointment } = useBooking();
+  const { language, activeBooking, cancelAppointment } = useBooking();
   const isAr = language === 'ar';
 
-  if (!activeBookingId) return null;
-
-  // Find active booking details
-  const activeBooking = bookings.find(b => b.id === activeBookingId && b.status !== 'cancelled');
-  if (!activeBooking) return null;
+  if (!activeBooking || activeBooking.status === 'cancelled') return null;
 
   const formatPeriodTime = (timeStr: string) => {
     const [h, m] = timeStr.split(':');
