@@ -258,6 +258,27 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           }
           throw new Error(error.message || "Failed to insert appointment into Supabase");
         }
+
+        // Trigger Next.js API route as a secure bridge for WhatsApp notification
+        try {
+          fetch('/api/public/whatsapp', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              doctor_id: doctorId,
+              patient_name: name,
+              patient_phone: phone,
+              appointment_date: date,
+              appointment_time: time
+            })
+          }).catch(err => {
+            console.error('Non-blocking WhatsApp API trigger error:', err);
+          });
+        } catch (webhookErr) {
+          console.error('Error invoking WhatsApp API trigger client-side:', webhookErr);
+        }
       } catch (err: any) {
         if (err.message === "هذا الموعد تم حجزه بالفعل، من فضلك اختر موعدًا آخر") {
           throw err;
