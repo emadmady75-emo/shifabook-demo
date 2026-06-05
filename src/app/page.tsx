@@ -9,6 +9,7 @@ import BookingGrid from '@/components/booking/BookingGrid';
 import BookingModal from '@/components/booking/BookingModal';
 import RescheduleAlert from '@/components/booking/RescheduleAlert';
 import { useBooking, PatientBooking, DEMO_FACILITIES } from '@/components/BookingContext';
+import { formatDateOnly } from '@/lib/dates';
 
 export default function PatientLandingPage() {
   const { language, activeBookingId, doctorProfile, fetchPublicAvailability, selectedFacility, setSelectedFacility, phoneVerified } = useBooking();
@@ -21,7 +22,7 @@ export default function PatientLandingPage() {
   }, [doctorProfile?.id, selectedFacility.id]);
 
   const [selectedDate, setSelectedDate] = useState<string>(
-    new Date().toISOString().split('T')[0] // default to today
+    formatDateOnly(new Date()) // default to today
   );
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   

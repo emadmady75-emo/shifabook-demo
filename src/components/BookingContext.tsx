@@ -10,6 +10,7 @@ import {
   EGYPTIAN_SCHEDULE_CONFIG,
   EGYPTIAN_DEMO_PATIENTS
 } from '@/lib/demoData';
+import { formatDateOnly, parseDateOnlySafe } from '@/lib/dates';
 
 export type { Facility, DoctorProfile, ScheduleConfig };
 
@@ -83,6 +84,7 @@ interface BookingContextType {
   setVerifiedName: (name: string) => void;
   setPhoneVerified: (val: boolean) => void;
   checkPhoneBookings: (phone: string) => Promise<{ activeBooking: PatientBooking | null; patientName: string }>;
+  refreshAppointments: () => Promise<void>;
 }
 
 const BookingContext = createContext<BookingContextType | undefined>(undefined);
@@ -202,10 +204,10 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setIsLoadingAvailability(true);
     try {
       const today = new Date();
-      const startDate = today.toISOString().split('T')[0];
+      const startDate = formatDateOnly(today);
       const futureDate = new Date();
       futureDate.setDate(today.getDate() + 30);
-      const endDate = futureDate.toISOString().split('T')[0];
+      const endDate = formatDateOnly(futureDate);
 
       const res = await fetch(`/api/public/availability?doctorId=${doctorId}&start=${startDate}&end=${endDate}`);
       if (res.ok) {
@@ -226,6 +228,42 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       console.error('Error fetching public availability:', err);
     } finally {
       setIsLoadingAvailability(false);
+    }
+  };
+
+  const refreshAppointments = async () => {
+    const doctorId = doctorProfile?.id;
+    if (!doctorId) return;
+
+    const isDoctorRoute = typeof window !== 'undefined' && window.location.pathname.startsWith('/doctor');
+    if (isDoctorRoute) {
+      try {
+        const { createClient } = await import('@/lib/supabase/client');
+        const supabase = createClient();
+        const { data: appts, error } = await supabase
+          .from('appointments')
+          .select('*')
+          .eq('doctor_id', doctorId)
+          .order('appointment_date', { ascending: true })
+          .order('appointment_time', { ascending: true });
+        if (!error && appts) {
+          const mapped = appts.map(appt => ({
+            id: appt.id,
+            patientName: appt.patient_name,
+            mobileNumber: appt.patient_phone,
+            date: appt.appointment_date,
+            timeSlot: appt.appointment_time,
+            status: appt.status as any,
+            price: doctorProfile.consultationFee || 400,
+            createdAt: appt.created_at,
+          }));
+          setBookings(mapped);
+        }
+      } catch (err) {
+        console.error('Error refreshing doctor appointments:', err);
+      }
+    } else {
+      await fetchPublicAvailability(doctorId);
     }
   };
 
@@ -254,9 +292,32 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const { createClient } = await import('@/lib/supabase/client');
         const supabase = createClient();
         
+        const { normalizePhone } = await import('@/lib/phone');
+        const normalizedPhone = normalizePhone(phone);
+        const todayStr = formatDateOnly(new Date());
+
+        // Guard: Check for active booking
+        const { data: activeAppts, error: checkError } = await supabase
+          .from('appointments')
+          .select('id, patient_name, appointment_date, appointment_time')
+          .eq('doctor_id', doctorId)
+          .eq('patient_phone', normalizedPhone)
+          .neq('status', 'cancelled')
+          .gte('appointment_date', todayStr)
+          .limit(1);
+
+        if (checkError) {
+          console.error('Error checking active appointments during insert:', checkError);
+        } else if (activeAppts && activeAppts.length > 0) {
+          throw new Error("لديك حجز نشط بالفعل مسجل بهذا الرقم. يرجى إلغاء الموعد أو تعديله أولاً.");
+        }
+        
         const { error } = await supabase
           .from('appointments')
-          .insert(payload);
+          .insert({
+            ...payload,
+            patient_phone: normalizedPhone
+          });
 
         if (error) {
           if (error.code === '23505') {
@@ -362,10 +423,8 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setActiveBooking(newBooking);
     saveActiveId(newBooking.id);
 
-    // Fetch updated public availability to reflect on the grid immediately
-    if (doctorId) {
-      await fetchPublicAvailability(doctorId);
-    }
+    // Fetch updated appointments/availability immediately
+    await refreshAppointments();
 
     // Trigger WhatsApp simulator
     triggerMockWhatsAppEvent('booking.created', newBooking);
@@ -455,11 +514,8 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     localStorage.setItem('shifabook_active_booking_details', JSON.stringify(updatedBooking));
     setActiveBooking(updatedBooking);
 
-    // Refresh public availability
-    const doctorId = doctorProfile?.id;
-    if (doctorId) {
-      await fetchPublicAvailability(doctorId);
-    }
+    // Refresh public availability or doctor appointments to reflect immediately
+    await refreshAppointments();
 
     return true;
   };
@@ -482,15 +538,15 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
     }
 
+    // Update local state directly for immediate feedback
+    setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'cancelled' as const } : b));
+
     localStorage.removeItem('shifabook_active_booking_details');
     setActiveBooking(null);
     saveActiveId(null);
 
-    // Refresh public availability
-    const doctorId = doctorProfile?.id;
-    if (doctorId) {
-      await fetchPublicAvailability(doctorId);
-    }
+    // Refresh appointments immediately
+    await refreshAppointments();
   };
 
   const confirmAttendance = async (bookingId: string) => {
@@ -515,12 +571,13 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return b;
     });
     setBookings(updated);
+    await refreshAppointments();
   };
 
   // Generate Slots dynamically for a chosen date based on capacity config
   const generateTimeSlotsForDate = (dateStr: string): TimeSlot[] => {
     const slots: TimeSlot[] = [];
-    const dateObj = new Date(dateStr);
+    const dateObj = parseDateOnlySafe(dateStr);
     const dayOfWeek = dateObj.getDay(); // 0 = Sunday, 6 = Saturday
 
     // Check if clinic is working on this day of week
@@ -538,7 +595,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const dayBookings = bookings.filter(b => b.date === dateStr && b.status !== 'cancelled');
 
     // Simulate current mock time context to mark past slots as expired
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = formatDateOnly(new Date());
     const isToday = dateStr === todayStr;
     const currentHour = new Date().getHours();
     const currentMin = new Date().getMinutes();
@@ -648,7 +705,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const { normalizePhone } = await import('@/lib/phone');
       
       const normalized = normalizePhone(phoneInput);
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = formatDateOnly(new Date());
       const supabase = createClient();
       
       // 1. Check if patient has an active future/today booking
@@ -861,6 +918,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setVerifiedName,
         setPhoneVerified,
         checkPhoneBookings,
+        refreshAppointments,
       }}
     >
       {children}

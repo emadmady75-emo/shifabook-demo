@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { useBooking } from '../BookingContext';
+import { formatDateOnly } from '@/lib/dates';
 
 interface DaySelectorProps {
   selectedDate: string;
@@ -24,7 +25,7 @@ export default function DaySelector({ selectedDate, onSelectDate }: DaySelectorP
   const getMonthName = (date: Date) =>
     date.toLocaleDateString(isAr ? 'ar-EG' : 'en-US', { month: 'short' });
 
-  const formatDateStr = (date: Date) => date.toISOString().split('T')[0];
+  const formatDateStr = (date: Date) => formatDateOnly(date);
 
   const isToday = (date: Date) =>
     date.toDateString() === new Date().toDateString();

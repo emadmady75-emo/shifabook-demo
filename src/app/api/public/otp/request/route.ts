@@ -15,6 +15,37 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid phone number' }, { status: 400 });
     }
 
+    // Server-side check: prevent multiple active bookings for same phone number
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (supabaseUrl && serviceRoleKey) {
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabase = createClient(supabaseUrl, serviceRoleKey);
+      
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const day = String(today.getDate()).padStart(2, '0');
+      const todayStr = `${year}-${month}-${day}`;
+
+      const { data: activeAppts, error: dbError } = await supabase
+        .from('appointments')
+        .select('id')
+        .eq('patient_phone', normalizedPhone)
+        .neq('status', 'cancelled')
+        .gte('appointment_date', todayStr)
+        .limit(1);
+
+      if (dbError) {
+        console.error('Server-side active booking check error:', dbError);
+      } else if (activeAppts && activeAppts.length > 0) {
+        return NextResponse.json({ 
+          error: 'لديك حجز نشط بالفعل مسجل بهذا الرقم. يرجى إلغاء الموعد أو تعديله أولاً.' 
+        }, { status: 409 });
+      }
+    }
+
     // Generate random 4 digit code
     const otp = Math.floor(1000 + Math.random() * 9000).toString();
 

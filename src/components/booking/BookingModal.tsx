@@ -29,7 +29,8 @@ export default function BookingModal({
     verifiedName,
     setPhoneVerified,
     phoneVerified,
-    checkPhoneBookings
+    checkPhoneBookings,
+    activeBooking
   } = useBooking();
 
   const isAr = language === 'ar';
@@ -50,7 +51,9 @@ export default function BookingModal({
   // Prefill phone and name states based on context/rescheduling settings
   React.useEffect(() => {
     if (isRescheduling && rescheduleBookingId) {
-      const existing = bookings.find(b => b.id === rescheduleBookingId);
+      const existing = (activeBooking && activeBooking.id === rescheduleBookingId)
+        ? activeBooking
+        : bookings.find(b => b.id === rescheduleBookingId);
       if (existing) {
         setName(existing.patientName);
         setPhone(existing.mobileNumber);
@@ -59,7 +62,42 @@ export default function BookingModal({
       setPhone(verifiedPhone);
       setName(verifiedName);
     }
-  }, [isRescheduling, rescheduleBookingId, bookings, verifiedPhone, verifiedName]);
+  }, [isRescheduling, rescheduleBookingId, activeBooking, bookings, verifiedPhone, verifiedName]);
+
+  const handleRescheduleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    if (!rescheduleBookingId) {
+      setError(isAr ? 'عذراً، لم يتم العثور على الحجز النشط' : 'Active booking not found.');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const moved = await rescheduleAppointment(rescheduleBookingId, selectedDate, selectedTime);
+      if (moved) {
+        const updatedBooking = activeBooking || bookings.find(b => b.id === rescheduleBookingId);
+        if (updatedBooking) {
+          onSuccess({
+            ...updatedBooking,
+            date: selectedDate,
+            timeSlot: selectedTime,
+            status: 'confirmed'
+          });
+        } else {
+          onClose();
+        }
+      } else {
+        setError(isAr ? 'عذراً، هذا المقعد قد امتلأ بالفعل.' : 'Sorry, this slot is fully booked now.');
+      }
+    } catch (err: any) {
+      setError(err?.message || (isAr ? 'فشل تعديل الموعد' : 'Failed to reschedule appointment'));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleIntakeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -227,6 +265,101 @@ export default function BookingModal({
     const displayHr = hr > 12 ? hr - 12 : hr === 0 ? 12 : hr;
     return `${displayHr}:${m} ${suffix}`;
   };
+
+  if (isRescheduling) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        {/* Dark Overlay */}
+        <div onClick={onClose} className="absolute inset-0 bg-[#04080b]/90 backdrop-blur-sm" />
+
+        {/* Modal Dialog */}
+        <div className="relative w-full max-w-md glass-panel rounded-3xl overflow-hidden shadow-2xl z-10 border border-teal-500/20 text-right animate-in fade-in zoom-in-95 duration-200">
+          
+          {/* Modal Header */}
+          <div className="p-6 pb-4 border-b border-teal-950/60 flex items-center justify-between">
+            <button 
+              onClick={onClose} 
+              className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-900 transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            
+            <h3 className="text-lg font-black text-white">
+              {isAr ? 'تأكيد نقل الموعد' : 'Confirm Appointment Rescheduling'}
+            </h3>
+          </div>
+
+          {/* Selected Slot Summary Box */}
+          <div className="mx-6 mt-4 p-4 rounded-2xl bg-teal-950/20 border border-teal-900/40 flex items-center justify-between text-sm">
+            <div className="space-y-0.5">
+              <span className="text-xs text-slate-400 block">{isAr ? 'التاريخ المختار' : 'Date'}</span>
+              <span className="font-bold text-white">{selectedDate}</span>
+            </div>
+            <div className="space-y-0.5 text-left">
+              <span className="text-xs text-slate-400 block">{isAr ? 'الموعد المختار' : 'Time'}</span>
+              <span className="font-bold text-teal-300">{formatPeriodTime(selectedTime)}</span>
+            </div>
+          </div>
+
+          <form onSubmit={handleRescheduleSubmit} className="p-6 space-y-5">
+            {error && (
+              <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs font-semibold text-rose-400 text-center">
+                ⚠️ {error}
+              </div>
+            )}
+
+            {/* Rescheduling Details Comparison Card */}
+            <div className="space-y-3">
+              {activeBooking && (
+                <div className="p-4 rounded-2xl bg-[#09151e] border border-teal-950/60 space-y-3 text-sm text-slate-300">
+                  <div className="flex justify-between items-center pb-2 border-b border-teal-950/20">
+                    <span className="text-xs text-slate-500">{isAr ? 'الاسم الكامل:' : 'Full Name:'}</span>
+                    <span className="font-bold text-white">{activeBooking.patientName}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-slate-500">{isAr ? 'الموعد الحالي:' : 'Current Slot:'}</span>
+                    <span className="font-medium text-slate-400 font-mono">
+                      {activeBooking.date} {formatPeriodTime(activeBooking.timeSlot)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center pt-2 text-teal-400 font-bold border-t border-teal-950/20">
+                    <span className="text-xs text-teal-500">{isAr ? 'الموعد الجديد:' : 'New Slot:'}</span>
+                    <span className="font-mono">
+                      {selectedDate} {formatPeriodTime(selectedTime)}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="pt-2 flex gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 py-3.5 rounded-xl border border-teal-950/60 bg-transparent text-slate-300 font-bold text-sm hover:bg-slate-900 hover:text-white transition-colors"
+              >
+                {isAr ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex-[2] py-3.5 rounded-xl bg-gradient-to-tr from-teal-500 to-emerald-400 text-[#070e12] font-black text-sm hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-1.5 shadow-md shadow-teal-500/10"
+              >
+                {loading ? (
+                  <div className="w-5 h-5 border-2 border-[#070e12] border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <span>{isAr ? 'تأكيد نقل الموعد' : 'Confirm Reschedule'}</span>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

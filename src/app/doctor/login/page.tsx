@@ -30,11 +30,21 @@ export default function DoctorLogin() {
 
     if (signInError) {
       console.error('Supabase auth error:', signInError);
-      setError(signInError.message);
+      setError(signInError.message || (isAr ? 'فشل تسجيل الدخول. يرجى التحقق من البيانات.' : 'Login failed. Please check credentials.'));
       setLoading(false);
     } else {
-      router.refresh();
-      router.push('/doctor');
+      setError('');
+      try {
+        router.refresh();
+        router.replace('/doctor');
+      } catch (err) {
+        console.error('Router redirect failed, using fallback:', err);
+      }
+      setTimeout(() => {
+        if (typeof window !== 'undefined' && window.location.pathname.includes('/login')) {
+          window.location.href = '/doctor';
+        }
+      }, 500);
     }
   };
 

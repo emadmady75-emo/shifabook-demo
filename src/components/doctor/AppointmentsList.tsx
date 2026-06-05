@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { useBooking, PatientBooking, WhatsAppEvent } from '../BookingContext';
+import { formatDateOnly } from '@/lib/dates';
 
 export default function AppointmentsList() {
   const { language, bookings, cancelAppointment, confirmAttendance, whatsappEvents } = useBooking();
@@ -23,7 +24,7 @@ export default function AppointmentsList() {
 
   const isAppointmentPast = (dateStr: string, timeStr: string): boolean => {
     const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
+    const todayStr = formatDateOnly(now);
     if (dateStr < todayStr) return true;
     if (dateStr > todayStr) return false;
     const [h, m] = timeStr.split(':').map(Number);
