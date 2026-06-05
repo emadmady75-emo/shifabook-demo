@@ -4,9 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node -e \"const fs = require('fs'); if (fs.existsSync('public/_next')) fs.rmSync('public/_next', {recursive: true, force: true})\"",
     "build": "next build",
     "postbuild": "node scripts/postbuild.js",
-    "start": "next start",
+    "start": "node server.js",
     "lint": "next lint"
   },
   "dependencies": {
