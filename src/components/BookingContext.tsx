@@ -1,8 +1,21 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { 
+  Facility,
+  DoctorProfile,
+  ScheduleConfig,
+  EGYPTIAN_FACILITIES,
+  EGYPTIAN_DOCTORS,
+  EGYPTIAN_SCHEDULE_CONFIG,
+  EGYPTIAN_DEMO_PATIENTS
+} from '@/lib/demoData';
 
-// Data Interfaces
+export type { Facility, DoctorProfile, ScheduleConfig };
+
+// Constant re-exports for backward compatibility
+export const DEMO_FACILITIES = EGYPTIAN_FACILITIES;
+
 export interface PatientBooking {
   id: string;
   patientName: string;
@@ -12,15 +25,9 @@ export interface PatientBooking {
   status: 'pending' | 'confirmed' | 'cancelled';
   price: number;      // Revenue Tracking (e.g. 500 EGP)
   createdAt: string;
-}
-
-export interface ScheduleConfig {
-  workingDays: number[];     // Day indexes (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
-  startTime: string;        // "HH:MM" e.g., "09:00"
-  endTime: string;          // "HH:MM" e.g., "17:00"
-  slotDurationMinutes: number; // e.g., 30 minutes
-  capacityPerSlot: number;   // Capacity-ready slot model (e.g. 1 or 2 patients per slot)
-  pricePerAppointment: number; // For growth/revenue metrics (e.g. 500 EGP)
+  facilityName?: string;
+  facilityMapUrl?: string;
+  facilityAddress?: string;
 }
 
 export interface TimeSlot {
@@ -41,21 +48,6 @@ export interface WhatsAppEvent {
   status: 'sent' | 'delivered' | 'read' | 'replied';
 }
 
-export interface DoctorProfile {
-  id?: string;
-  name: string;
-  nameEn: string;
-  title: string;
-  titleEn: string;
-  specialization: string;
-  specializationEn: string;
-  avatar: string;
-  hospital: string;
-  hospitalEn: string;
-  consultationFee?: number;
-  city?: string;
-}
-
 interface BookingContextType {
   bookings: PatientBooking[];
   setBookings: React.Dispatch<React.SetStateAction<PatientBooking[]>>;
@@ -66,6 +58,8 @@ interface BookingContextType {
   activeBooking: PatientBooking | null;
   language: 'ar' | 'en';
   setLanguage: (lang: 'ar' | 'en') => void;
+  selectedFacility: Facility;
+  setSelectedFacility: (facility: Facility) => void;
   updateScheduleConfig: (config: Partial<ScheduleConfig>) => void;
   bookAppointment: (name: string, phone: string, date: string, time: string) => Promise<PatientBooking>;
   rescheduleAppointment: (bookingId: string, newDate: string, newTime: string) => Promise<boolean>;
@@ -77,45 +71,40 @@ interface BookingContextType {
   fetchPublicAvailability: (doctorId: string) => Promise<void>;
   isLoadingAvailability: boolean;
   setIsLoadingAvailability: (loading: boolean) => void;
+  patients: any[];
+  fetchPatients: () => Promise<void>;
+  fetchNotesForPatient: (patientId: string) => Promise<any[]>;
+  addPatientNote: (patientId: string, noteText: string, noteType?: string) => Promise<boolean>;
+  updatePatientProfile: (patientId: string, updatedFields: any) => Promise<boolean>;
 }
 
 const BookingContext = createContext<BookingContextType | undefined>(undefined);
 
 // Initial Doctor Profile
-const INITIAL_DOCTOR: DoctorProfile = {
-  name: "د. عبدالله المصري",
-  nameEn: "Dr. Ahmed Al-Otaibi",
-  title: "استشاري طب وجراحة القلب والأوعية الدموية",
-  titleEn: "Consultant Cardiologist & Vascular Surgeon",
-  specialization: "طب وجراحة القلب القسطرة التداخلية، وعلاج ارتفاع ضغط الدم الشرياني والأوعية الدموية.",
-  specializationEn: "Interventional Cardiology, hypertension management, and arterial disorders.",
-  avatar: "https://images.unsplash.com/photo-1622253692010-333f2da6031d?q=80&w=256&h=256&fit=crop",
-  hospital: "مستشفى القصر العيني التخصصي",
-  hospitalEn: "Shifa Specialized Hospital, Riyadh",
-};
+const INITIAL_DOCTOR: DoctorProfile = EGYPTIAN_DOCTORS[0];
 
 // Initial Config
-const DEFAULT_CONFIG: ScheduleConfig = {
-  workingDays: [0, 1, 2, 3, 4], // Sun to Thu
-  startTime: "09:00",
-  endTime: "17:00",
-  slotDurationMinutes: 30,
-  capacityPerSlot: 1, // Capacity-ready slots
-  pricePerAppointment: 500, // 500 EGP per booking
-};
+const DEFAULT_CONFIG: ScheduleConfig = EGYPTIAN_SCHEDULE_CONFIG;
 
 // Initial Mock Bookings
 const INITIAL_BOOKINGS: PatientBooking[] = [];
 
 export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [bookings, setBookings] = useState<PatientBooking[]>(INITIAL_BOOKINGS);
+  const [patients, setPatients] = useState<any[]>([]);
   const [scheduleConfig, setScheduleConfig] = useState<ScheduleConfig>(DEFAULT_CONFIG);
   const [activeBookingId, setActiveBookingId] = useState<string | null>(null);
   const [activeBooking, setActiveBooking] = useState<PatientBooking | null>(null);
   const [language, setLanguage] = useState<'ar' | 'en'>('ar');
+  const [selectedFacility, setSelectedFacilityState] = useState<Facility>(DEMO_FACILITIES[0]);
   const [doctorProfile, setDoctorProfile] = useState<DoctorProfile>(INITIAL_DOCTOR);
   const [isHydrated, setIsHydrated] = useState(false);
   const [isLoadingAvailability, setIsLoadingAvailability] = useState(true);
+
+  const setSelectedFacility = (fac: Facility) => {
+    setSelectedFacilityState(fac);
+    localStorage.setItem('shifabook_facility', JSON.stringify(fac));
+  };
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -155,11 +144,19 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const storedActiveId = localStorage.getItem('shifabook_active_booking');
     const storedActiveBooking = localStorage.getItem('shifabook_active_booking_details');
     const storedLang = localStorage.getItem('shifabook_lang');
+    const storedFacility = localStorage.getItem('shifabook_facility');
 
     if (storedConfig) setScheduleConfig(JSON.parse(storedConfig));
     if (storedActiveId) setActiveBookingId(storedActiveId);
     if (storedActiveBooking) setActiveBooking(JSON.parse(storedActiveBooking));
     if (storedLang) setLanguage(storedLang as 'ar' | 'en');
+    if (storedFacility) {
+      try {
+        setSelectedFacilityState(JSON.parse(storedFacility));
+      } catch (e) {
+        console.error('Failed to parse stored facility:', e);
+      }
+    }
     
     // Clear old localStorage orphaned WhatsApp events
     localStorage.removeItem('shifabook_wa_events');
@@ -259,6 +256,46 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           throw new Error(error.message || "Failed to insert appointment into Supabase");
         }
 
+        // Sync patient profile to `patients` table
+        try {
+          let searchPhone = phone;
+          if (searchPhone.startsWith('0')) {
+            searchPhone = '+20' + searchPhone.substring(1);
+          } else if (searchPhone.startsWith('20') && !searchPhone.startsWith('+')) {
+            searchPhone = '+' + searchPhone;
+          } else if (!searchPhone.startsWith('+') && searchPhone.length === 10 && searchPhone.startsWith('1')) {
+            searchPhone = '+20' + searchPhone;
+          }
+          
+          const { data: existingPatient } = await supabase
+            .from('patients')
+            .select('id')
+            .eq('phone', searchPhone)
+            .limit(1);
+
+          if (!existingPatient || existingPatient.length === 0) {
+            await supabase.from('patients').insert({
+              id: crypto.randomUUID(),
+              full_name: name,
+              phone: searchPhone,
+              gender: 'غير محدد',
+              birth_date: '1990-01-01',
+              age: 36,
+              blood_type: 'O+',
+              chronic_diseases: 'لا يوجد',
+              allergies: 'لا يوجد',
+              emergency_contact_name: '',
+              emergency_contact_phone: '',
+              patient_status: 'normal',
+              whatsapp_opt_in: true,
+              sms_opt_in: false,
+              created_at: new Date().toISOString()
+            });
+          }
+        } catch (syncErr) {
+          console.error('Non-blocking patient profile sync error:', syncErr);
+        }
+
         // Trigger Next.js API route as a secure bridge for WhatsApp notification
         try {
           fetch('/api/public/whatsapp', {
@@ -271,7 +308,9 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
               patient_name: name,
               patient_phone: phone,
               appointment_date: date,
-              appointment_time: time
+              appointment_time: time,
+              facility_name: language === 'ar' ? selectedFacility.name : selectedFacility.nameEn,
+              facility_map_url: selectedFacility.mapUrl
             })
           }).catch(err => {
             console.error('Non-blocking WhatsApp API trigger error:', err);
@@ -303,6 +342,9 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       status: 'pending',
       price: scheduleConfig.pricePerAppointment,
       createdAt: new Date().toISOString(),
+      facilityName: language === 'ar' ? selectedFacility.name : selectedFacility.nameEn,
+      facilityMapUrl: selectedFacility.mapUrl,
+      facilityAddress: language === 'ar' ? selectedFacility.address : selectedFacility.addressEn
     };
 
     // Save active booking details for rescheduling banner (separate from grid calculations)
@@ -349,17 +391,56 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (error) {
           throw error;
         }
+
+        // Trigger WhatsApp webhook bridge for rescheduling
+        const oldFacilityName = bookingToMove.facilityName || (language === 'ar' ? DEMO_FACILITIES[0].name : DEMO_FACILITIES[0].nameEn);
+        const newFacilityName = language === 'ar' ? selectedFacility.name : selectedFacility.nameEn;
+        const newFacilityMapUrl = selectedFacility.mapUrl;
+
+        try {
+          fetch('/api/public/whatsapp', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              doctor_id: doctorProfile?.id,
+              patient_name: bookingToMove.patientName,
+              patient_phone: bookingToMove.mobileNumber,
+              appointment_date: newDate,
+              appointment_time: newTime,
+              is_rescheduled: true,
+              old_facility_name: oldFacilityName,
+              new_facility_name: newFacilityName,
+              old_appointment_date: bookingToMove.date,
+              old_appointment_time: bookingToMove.timeSlot,
+              facility_name: newFacilityName,
+              facility_map_url: newFacilityMapUrl
+            })
+          }).catch(err => {
+            console.error('Non-blocking WhatsApp API reschedule trigger error:', err);
+          });
+        } catch (webhookErr) {
+          console.error('Error invoking WhatsApp API reschedule trigger client-side:', webhookErr);
+        }
+
       } catch (err) {
         console.error('Failed to reschedule appointment in Supabase:', err);
         return false;
       }
     }
 
+    const newFacilityName = language === 'ar' ? selectedFacility.name : selectedFacility.nameEn;
+    const newFacilityMapUrl = selectedFacility.mapUrl;
+
     const updatedBooking = {
       ...bookingToMove,
       date: newDate,
       timeSlot: newTime,
       status: 'confirmed' as const,
+      facilityName: newFacilityName,
+      facilityMapUrl: newFacilityMapUrl,
+      facilityAddress: language === 'ar' ? selectedFacility.address : selectedFacility.addressEn
     };
     localStorage.setItem('shifabook_active_booking_details', JSON.stringify(updatedBooking));
     setActiveBooking(updatedBooking);
@@ -480,12 +561,23 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const getDerivedWhatsAppEvents = (): WhatsAppEvent[] => {
     const events: WhatsAppEvent[] = [];
 
+    const formatTimeHelper = (timeStr: string) => {
+      const [h, m] = timeStr.split(':');
+      const hr = parseInt(h);
+      const suffix = language === 'ar' ? (hr >= 12 ? 'م' : 'ص') : (hr >= 12 ? 'PM' : 'AM');
+      const displayHr = hr > 12 ? hr - 12 : hr === 0 ? 12 : hr;
+      return `${displayHr}:${m} ${suffix}`;
+    };
+
     bookings.forEach(b => {
       // 1. Created Event
       const createdTime = new Date(b.createdAt || Date.now()).toLocaleTimeString(language === 'ar' ? 'ar-EG' : 'en-US', {
         hour: '2-digit',
         minute: '2-digit'
       });
+      
+      const formattedSlotTime = formatTimeHelper(b.timeSlot);
+
       events.push({
         id: `wa-created-${b.id}`,
         timestamp: createdTime,
@@ -493,8 +585,8 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         patientName: b.patientName,
         phone: b.mobileNumber,
         message: language === 'ar' 
-          ? `مرحباً ${b.patientName}، تم تسجيل حجزك المبدئي بنجاح في شفاء بوك بتاريخ ${b.date} الساعة ${b.timeSlot}. يرجى الرد برقم 1 لتأكيد الحضور.`
-          : `Hello ${b.patientName}, your appointment has been registered on ${b.date} at ${b.timeSlot}. Please reply with 1 to confirm.`,
+          ? `يا هلا يا ${b.patientName}، حجزك المبدئي مع د. عبدالله المصري (استشاري طب وجراحة القلب والأوعية الدموية) تم بنجاح في شفاء بوك. 🩺\n\n📅 الموعد: يوم ${b.date} الساعة ${formattedSlotTime}\n📍 المكان: ${b.facilityName || 'فرع العيادة'} (${b.facilityAddress || ''})\n🗺️ لوكيشن العيادة: ${b.facilityMapUrl || ''}\n\nيرجى الرد برقم 1 لتأكيد الحضور. تشرفنا بزيارتك!`
+          : `Hello ${b.patientName}, your initial booking with Dr. Abdullah El-Masry (Consultant Cardiologist) has been registered. 🩺\n\n📅 Date: ${b.date} at ${formattedSlotTime}\n📍 Branch: ${b.facilityName || ''} (${b.facilityAddress || ''})\n🗺️ Location Map: ${b.facilityMapUrl || ''}\n\nPlease reply with 1 to confirm.`,
         status: b.status === 'pending' ? 'sent' : 'replied'
       });
 
@@ -511,8 +603,8 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           patientName: b.patientName,
           phone: b.mobileNumber,
           message: language === 'ar'
-            ? `تأكيد: تم تأكيد موعدكم رسمياً بتاريخ ${b.date} الساعة ${b.timeSlot}. نتطلع لرؤيتك.`
-            : `Confirmed: Your appointment on ${b.date} at ${b.timeSlot} is now confirmed.`,
+            ? `تم تأكيد حجزك رسمياً يا ${b.patientName} مع د. عبدالله المصري يوم ${b.date} الساعة ${formattedSlotTime}. نتطلع لرؤيتك بالسلامة في العيادة! 🩺✨`
+            : `Confirmed: Your appointment with Dr. Abdullah El-Masry on ${b.date} at ${formattedSlotTime} is now confirmed. We look forward to seeing you.`,
           status: 'read'
         });
       }
@@ -530,15 +622,120 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           patientName: b.patientName,
           phone: b.mobileNumber,
           message: language === 'ar'
-            ? `تنبيه: تم إلغاء موعدك المجدول بتاريخ ${b.date} الساعة ${b.timeSlot}.`
-            : `Notice: Your scheduled appointment on ${b.date} at ${b.timeSlot} has been cancelled.`,
+            ? `تم إلغاء موعدك المجدول مع د. عبدالله المصري يوم ${b.date} الساعة ${formattedSlotTime}. نتمنى لك عاجل الشفاء والصحة والعافية! 🌸`
+            : `Notice: Your scheduled appointment with Dr. Abdullah El-Masry on ${b.date} at ${formattedSlotTime} has been cancelled. Wish you a speedy recovery.`,
           status: 'sent'
         });
       }
     });
 
-    // Sort by id descending so the latest is at the top
     return events.sort((a, b) => b.id.localeCompare(a.id)).slice(0, 50);
+  };
+
+  const fetchPatients = async () => {
+    try {
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { data, error } = await supabase.from('patients').select('*').order('full_name');
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        setPatients(data);
+      } else {
+        console.log("No patients found. Seeding demo patients...");
+        const seedPromises = EGYPTIAN_DEMO_PATIENTS.map(async (p) => {
+          const { error: err } = await supabase.from('patients').insert({
+            id: crypto.randomUUID(),
+            full_name: p.full_name,
+            phone: p.phone,
+            gender: p.gender,
+            birth_date: p.birth_date,
+            age: p.age,
+            blood_type: p.blood_type,
+            chronic_diseases: p.chronic_diseases,
+            allergies: p.allergies,
+            emergency_contact_name: p.emergency_contact_name,
+            emergency_contact_phone: p.emergency_contact_phone,
+            patient_status: p.patient_status,
+            notes: p.notes,
+            whatsapp_opt_in: true,
+            sms_opt_in: false,
+            created_at: new Date().toISOString()
+          });
+          if (err) console.error("Seed error for patient:", p.full_name, err);
+        });
+        await Promise.all(seedPromises);
+        
+        const { data: refetched, error: refetchErr } = await supabase.from('patients').select('*').order('full_name');
+        if (!refetchErr && refetched) {
+          setPatients(refetched);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching patients in BookingProvider:', err);
+    }
+  };
+
+  const fetchNotesForPatient = async (patientId: string) => {
+    try {
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from('patient_notes')
+        .select('*')
+        .eq('patient_id', patientId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    } catch (err) {
+      console.error('Error fetching patient notes:', err);
+      return [];
+    }
+  };
+
+  const addPatientNote = async (patientId: string, noteText: string, noteType: string = 'General') => {
+    try {
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const doctorId = doctorProfile?.id || null;
+      
+      const { error } = await supabase.from('patient_notes').insert({
+        id: crypto.randomUUID(),
+        patient_id: patientId,
+        note_type: noteType,
+        note: noteText,
+        created_by: doctorId,
+        created_at: new Date().toISOString()
+      });
+      
+      if (error) throw error;
+      return true;
+    } catch (err) {
+      console.error('Error adding patient note:', err);
+      return false;
+    }
+  };
+
+  const updatePatientProfile = async (patientId: string, updatedFields: any) => {
+    try {
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { error } = await supabase
+        .from('patients')
+        .update({
+          ...updatedFields,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', patientId);
+      
+      if (error) throw error;
+      
+      setPatients(prev => prev.map(p => p.id === patientId ? { ...p, ...updatedFields } : p));
+      return true;
+    } catch (err) {
+      console.error('Error updating patient profile:', err);
+      return false;
+    }
   };
 
   return (
@@ -556,6 +753,8 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           setLanguage(lang);
           localStorage.setItem('shifabook_lang', lang);
         },
+        selectedFacility,
+        setSelectedFacility,
         updateScheduleConfig,
         bookAppointment,
         rescheduleAppointment,
@@ -567,6 +766,11 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         fetchPublicAvailability,
         isLoadingAvailability,
         setIsLoadingAvailability,
+        patients,
+        fetchPatients,
+        fetchNotesForPatient,
+        addPatientNote,
+        updatePatientProfile,
       }}
     >
       {children}

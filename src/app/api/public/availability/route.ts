@@ -7,6 +7,7 @@ export async function GET(request: NextRequest) {
     const doctorId = searchParams.get('doctorId');
     const start = searchParams.get('start');
     const end = searchParams.get('end');
+    const facilityId = searchParams.get('facilityId');
 
     if (!doctorId || !start || !end) {
       return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
@@ -20,13 +21,15 @@ export async function GET(request: NextRequest) {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Query appointments filtered by doctor_id, date range, and status not cancelled
-    const { data, error } = await supabase
+    const query = supabase
       .from('appointments')
       .select('appointment_date, appointment_time, status, doctor_id')
       .eq('doctor_id', doctorId)
       .gte('appointment_date', start)
       .lte('appointment_date', end)
       .neq('status', 'cancelled');
+
+    const { data, error } = await query;
 
     if (error) {
       console.error('Error fetching public availability from Supabase:', error);

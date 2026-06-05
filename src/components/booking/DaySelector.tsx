@@ -19,10 +19,10 @@ export default function DaySelector({ selectedDate, onSelectDate }: DaySelectorP
   });
 
   const getDayName = (date: Date) =>
-    date.toLocaleDateString(isAr ? 'ar-SA' : 'en-US', { weekday: 'short' });
+    date.toLocaleDateString(isAr ? 'ar-EG' : 'en-US', { weekday: 'short' });
 
   const getMonthName = (date: Date) =>
-    date.toLocaleDateString(isAr ? 'ar-SA' : 'en-US', { month: 'short' });
+    date.toLocaleDateString(isAr ? 'ar-EG' : 'en-US', { month: 'short' });
 
   const formatDateStr = (date: Date) => date.toISOString().split('T')[0];
 

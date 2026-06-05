@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
@@ -8,6 +8,7 @@ import StatsDashboard from '@/components/doctor/StatsDashboard';
 import ScheduleBuilder from '@/components/doctor/ScheduleBuilder';
 import AppointmentsList from '@/components/doctor/AppointmentsList';
 import ProfileSettings from '@/components/doctor/ProfileSettings';
+import PatientCRM from '@/components/doctor/PatientCRM';
 import { useBooking } from '@/components/BookingContext';
 import { createClient } from '@/lib/supabase/client';
 import { SupabaseDoctor, SupabaseAppointment } from './page';
@@ -19,6 +20,7 @@ interface DoctorDashboardClientProps {
 
 export default function DoctorDashboardClient({ doctor, initialAppointments }: DoctorDashboardClientProps) {
   const { language, doctorProfile, setBookings, setIsLoadingAvailability } = useBooking();
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'crm'>('dashboard');
   const isAr = language === 'ar';
   const router = useRouter();
   const supabase = createClient();
@@ -110,24 +112,54 @@ export default function DoctorDashboardClient({ doctor, initialAppointments }: D
             </div>
           </div>
 
-          {/* 1. Growth/Revenue Analytics Dashboard Widget */}
-          <StatsDashboard />
-
-          {/* 2. Main Administration & Configuration Grid */}
-          <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
-            
-            {/* Left Column: Weekly Schedule Configuration Builder Form & Profile Settings */}
-            <div className="xl:col-span-4 xl:sticky xl:top-24 space-y-8 max-h-[calc(100vh-8rem)] overflow-y-auto custom-scrollbar pr-1">
-              <ScheduleBuilder />
-              <ProfileSettings doctor={doctor} language={language} />
-            </div>
-
-            {/* Right Column: Active Appointments Data Ledger & Live Webhooks Hub */}
-            <div className="xl:col-span-8">
-              <AppointmentsList />
-            </div>
-
+          {/* Premium Tab Selector Bar */}
+          <div className="flex border-b border-teal-950/60 pb-px gap-6 text-right" dir="rtl">
+            <button
+              onClick={() => setActiveTab('dashboard')}
+              className={`pb-3 text-sm font-black border-b-2 transition-all duration-200 ${
+                activeTab === 'dashboard'
+                  ? 'border-teal-500 text-teal-400 font-extrabold'
+                  : 'border-transparent text-slate-400 hover:text-white'
+              }`}
+            >
+              {isAr ? 'لوحة المتابعة وجدول العيادة' : 'Clinic Dashboard & Scheduler'}
+            </button>
+            <button
+              onClick={() => setActiveTab('crm')}
+              className={`pb-3 text-sm font-black border-b-2 transition-all duration-200 ${
+                activeTab === 'crm'
+                  ? 'border-teal-500 text-teal-400 font-extrabold'
+                  : 'border-transparent text-slate-400 hover:text-white'
+              }`}
+            >
+              {isAr ? 'إدارة سجلات المرضى (CRM)' : 'Patient Directory & CRM'}
+            </button>
           </div>
+
+          {activeTab === 'dashboard' ? (
+            <>
+              {/* 1. Growth/Revenue Analytics Dashboard Widget */}
+              <StatsDashboard />
+
+              {/* 2. Main Administration & Configuration Grid */}
+              <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+                
+                {/* Left Column: Weekly Schedule Configuration Builder Form & Profile Settings */}
+                <div className="xl:col-span-4 xl:sticky xl:top-24 space-y-8 max-h-[calc(100vh-8rem)] overflow-y-auto custom-scrollbar pr-1">
+                  <ScheduleBuilder />
+                  <ProfileSettings doctor={doctor} language={language} />
+                </div>
+
+                {/* Right Column: Active Appointments Data Ledger & Live Webhooks Hub */}
+                <div className="xl:col-span-8">
+                  <AppointmentsList />
+                </div>
+
+              </div>
+            </>
+          ) : (
+            <PatientCRM />
+          )}
 
         </div>
       </main>

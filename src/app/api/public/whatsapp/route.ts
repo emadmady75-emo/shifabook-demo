@@ -23,7 +23,20 @@ function normalizePhone(phone: string): string {
 export async function POST(request: NextRequest) {
   try {
     const payload = await request.json();
-    const { doctor_id, patient_name, patient_phone, appointment_date, appointment_time } = payload;
+    const { 
+      doctor_id, 
+      patient_name, 
+      patient_phone, 
+      appointment_date, 
+      appointment_time,
+      facility_name,
+      facility_map_url,
+      is_rescheduled,
+      old_facility_name,
+      new_facility_name,
+      old_appointment_date,
+      old_appointment_time
+    } = payload;
 
     if (!doctor_id || !patient_phone || !appointment_date || !appointment_time) {
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
@@ -72,14 +85,28 @@ export async function POST(request: NextRequest) {
     }
 
     const outboundPayload = {
-      event_type: 'booking.created',
+      event_type: is_rescheduled ? 'booking.rescheduled' : 'booking.created',
       timestamp: new Date().toISOString(),
-      data: {
+      data: is_rescheduled ? {
+        doctor_id,
+        patient_name: verifiedPatientName,
+        patient_phone: normalizedPhone,
+        old_facility_name: old_facility_name || facility_name || '',
+        new_facility_name: new_facility_name || facility_name || '',
+        old_appointment_date: old_appointment_date || appointment_date,
+        old_appointment_time: old_appointment_time || appointment_time,
+        new_appointment_date: appointment_date,
+        new_appointment_time: appointment_time,
+        facility_name: new_facility_name || facility_name || '',
+        facility_map_url: facility_map_url || ''
+      } : {
         doctor_id,
         patient_name: verifiedPatientName,
         patient_phone: normalizedPhone,
         appointment_date,
-        appointment_time
+        appointment_time,
+        facility_name: facility_name || '',
+        facility_map_url: facility_map_url || ''
       }
     };
 
