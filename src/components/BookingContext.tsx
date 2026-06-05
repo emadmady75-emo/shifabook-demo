@@ -270,6 +270,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const bookAppointment = async (name: string, phone: string, date: string, time: string) => {
     // Use local ID for client-side state and localStorage representation only
     const finalId = `appt-${Date.now()}`;
+    let bookedId = finalId;
 
     const doctorId = doctorProfile?.id || null;
     if (!doctorId) {
@@ -312,12 +313,13 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           throw new Error("لديك حجز نشط بالفعل مسجل بهذا الرقم. يرجى إلغاء الموعد أو تعديله أولاً.");
         }
         
-        const { error } = await supabase
+        const { data: insertedData, error } = await supabase
           .from('appointments')
           .insert({
             ...payload,
             patient_phone: normalizedPhone
-          });
+          })
+          .select();
 
         if (error) {
           if (error.code === '23505') {
@@ -325,6 +327,10 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             throw new Error("هذا الموعد تم حجزه بالفعل، من فضلك اختر موعدًا آخر");
           }
           throw new Error(error.message || "Failed to insert appointment into Supabase");
+        }
+
+        if (insertedData && insertedData.length > 0) {
+          bookedId = insertedData[0].id;
         }
 
         // Sync patient profile to `patients` table
@@ -405,7 +411,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     const newBooking: PatientBooking = {
-      id: finalId,
+      id: bookedId,
       patientName: name,
       mobileNumber: phone,
       date,
@@ -521,25 +527,34 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const cancelAppointment = async (bookingId: string) => {
-    const booking = activeBooking && activeBooking.id === bookingId ? activeBooking : bookings.find(b => b.id === bookingId);
-    if (!booking) return;
+    const targetId = (activeBooking && activeBooking.id) ? activeBooking.id : bookingId;
+    if (!targetId) return;
 
     // If it's a Supabase UUID
-    if (bookingId.length === 36) {
+    if (targetId.length === 36) {
       try {
         const { createClient } = await import('@/lib/supabase/client');
         const supabase = createClient();
-        await supabase
+        const { data, error } = await supabase
           .from('appointments')
           .update({ status: 'cancelled' })
-          .eq('id', bookingId);
+          .eq('id', targetId)
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Supabase cancellation error:', error);
+          throw new Error(error.message || 'Failed to cancel appointment in Supabase');
+        }
+        console.log('Successfully cancelled appointment in Supabase:', data);
       } catch (err) {
         console.error('Failed to cancel appointment in Supabase:', err);
+        throw err;
       }
     }
 
     // Update local state directly for immediate feedback
-    setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'cancelled' as const } : b));
+    setBookings(prev => prev.map(b => (b.id === targetId || b.id === bookingId) ? { ...b, status: 'cancelled' as const } : b));
 
     localStorage.removeItem('shifabook_active_booking_details');
     setActiveBooking(null);
