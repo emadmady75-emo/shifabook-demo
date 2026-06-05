@@ -7,11 +7,30 @@ export default function StatsDashboard() {
   const { language, bookings, scheduleConfig } = useBooking();
   const isAr = language === 'ar';
 
+  const isAppointmentPast = (dateStr: string, timeStr: string): boolean => {
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    if (dateStr < todayStr) return true;
+    if (dateStr > todayStr) return false;
+    const [h, m] = timeStr.split(':').map(Number);
+    const currentTotalMin = now.getHours() * 60 + now.getMinutes();
+    const slotTotalMin = h * 60 + m;
+    return slotTotalMin < currentTotalMin;
+  };
+
   const activeBookings   = bookings.filter(b => b.status !== 'cancelled');
   const cancelledBookings = bookings.filter(b => b.status === 'cancelled');
 
-  const confirmedRevenue  = activeBookings.filter(b => b.status === 'confirmed').reduce((s, b) => s + b.price, 0);
-  const pendingRevenue    = activeBookings.filter(b => b.status === 'pending').reduce((s, b) => s + b.price, 0);
+  // Treat past active appointments (pending/confirmed) or future confirmed appointments as collected/completed revenue.
+  const confirmedRevenue = activeBookings
+    .filter(b => isAppointmentPast(b.date, b.timeSlot) || b.status === 'confirmed')
+    .reduce((s, b) => s + b.price, 0);
+
+  // Treat future pending appointments as pending/pipeline revenue.
+  const pendingRevenue = activeBookings
+    .filter(b => !isAppointmentPast(b.date, b.timeSlot) && b.status === 'pending')
+    .reduce((s, b) => s + b.price, 0);
+
   const totalGrossRevenue = confirmedRevenue + pendingRevenue;
   const potentialLoss     = cancelledBookings.reduce((s, b) => s + b.price, 0);
 

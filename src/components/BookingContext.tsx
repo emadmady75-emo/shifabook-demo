@@ -76,6 +76,13 @@ interface BookingContextType {
   fetchNotesForPatient: (patientId: string) => Promise<any[]>;
   addPatientNote: (patientId: string, noteText: string, noteType?: string) => Promise<boolean>;
   updatePatientProfile: (patientId: string, updatedFields: any) => Promise<boolean>;
+  verifiedPhone: string;
+  verifiedName: string;
+  phoneVerified: boolean;
+  setVerifiedPhone: (phone: string) => void;
+  setVerifiedName: (name: string) => void;
+  setPhoneVerified: (val: boolean) => void;
+  checkPhoneBookings: (phone: string) => Promise<{ activeBooking: PatientBooking | null; patientName: string }>;
 }
 
 const BookingContext = createContext<BookingContextType | undefined>(undefined);
@@ -92,6 +99,9 @@ const INITIAL_BOOKINGS: PatientBooking[] = [];
 export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [bookings, setBookings] = useState<PatientBooking[]>(INITIAL_BOOKINGS);
   const [patients, setPatients] = useState<any[]>([]);
+  const [verifiedPhone, setVerifiedPhone] = useState<string>('');
+  const [verifiedName, setVerifiedName] = useState<string>('');
+  const [phoneVerified, setPhoneVerified] = useState<boolean>(false);
   const [scheduleConfig, setScheduleConfig] = useState<ScheduleConfig>(DEFAULT_CONFIG);
   const [activeBookingId, setActiveBookingId] = useState<string | null>(null);
   const [activeBooking, setActiveBooking] = useState<PatientBooking | null>(null);
@@ -632,6 +642,79 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return events.sort((a, b) => b.id.localeCompare(a.id)).slice(0, 50);
   };
 
+  const checkPhoneBookings = async (phoneInput: string) => {
+    try {
+      const { createClient } = await import('@/lib/supabase/client');
+      const { normalizePhone } = await import('@/lib/phone');
+      
+      const normalized = normalizePhone(phoneInput);
+      const todayStr = new Date().toISOString().split('T')[0];
+      const supabase = createClient();
+      
+      // 1. Check if patient has an active future/today booking
+      const { data: appointments, error: apptError } = await supabase
+        .from('appointments')
+        .select('*')
+        .eq('patient_phone', normalized)
+        .neq('status', 'cancelled')
+        .gte('appointment_date', todayStr)
+        .order('appointment_date', { ascending: true })
+        .order('appointment_time', { ascending: true })
+        .limit(1);
+
+      let foundActive: PatientBooking | null = null;
+      if (!apptError && appointments && appointments.length > 0) {
+        const appt = appointments[0];
+        foundActive = {
+          id: appt.id,
+          patientName: appt.patient_name,
+          mobileNumber: appt.patient_phone,
+          date: appt.appointment_date,
+          timeSlot: appt.appointment_time,
+          status: appt.status as any,
+          price: scheduleConfig.pricePerAppointment,
+          createdAt: appt.created_at
+        };
+        setActiveBooking(foundActive);
+        saveActiveId(appt.id);
+        localStorage.setItem('shifabook_active_booking_details', JSON.stringify(foundActive));
+      } else {
+        setActiveBooking(null);
+        saveActiveId(null);
+        localStorage.removeItem('shifabook_active_booking_details');
+      }
+
+      // 2. Check if patient profile exists in database to load their name
+      const { data: patientData, error: patError } = await supabase
+        .from('patients')
+        .select('full_name')
+        .eq('phone', normalized)
+        .limit(1);
+
+      let retrievedName = '';
+      if (!patError && patientData && patientData.length > 0) {
+        retrievedName = patientData[0].full_name;
+        setVerifiedName(retrievedName);
+      } else {
+        setVerifiedName('');
+      }
+
+      setVerifiedPhone(normalized);
+      setPhoneVerified(true);
+
+      return {
+        activeBooking: foundActive,
+        patientName: retrievedName
+      };
+    } catch (err) {
+      console.error('Error checking phone bookings:', err);
+      return {
+        activeBooking: null,
+        patientName: ''
+      };
+    }
+  };
+
   const fetchPatients = async () => {
     try {
       const { createClient } = await import('@/lib/supabase/client');
@@ -771,6 +854,13 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         fetchNotesForPatient,
         addPatientNote,
         updatePatientProfile,
+        verifiedPhone,
+        verifiedName,
+        phoneVerified,
+        setVerifiedPhone,
+        setVerifiedName,
+        setPhoneVerified,
+        checkPhoneBookings,
       }}
     >
       {children}

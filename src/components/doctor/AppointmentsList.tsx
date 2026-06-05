@@ -21,27 +21,49 @@ export default function AppointmentsList() {
     return `${displayHr}:${m} ${suffix}`;
   };
 
-  const getStatusBadge = (status: PatientBooking['status']) => {
-    switch (status) {
-      case 'confirmed':
-        return (
-          <span className="px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 text-xs border border-emerald-500/20 font-bold">
-            {isAr ? '✓ مؤكد' : '✓ Confirmed'}
-          </span>
-        );
-      case 'pending':
-        return (
-          <span className="px-2 py-1 rounded-lg bg-amber-500/10 text-amber-400 text-xs border border-amber-500/20 font-bold animate-pulse">
-            {isAr ? '⏳ بانتظار التأكيد' : '⏳ Pending confirmation'}
-          </span>
-        );
-      case 'cancelled':
-        return (
-          <span className="px-2 py-1 rounded-lg bg-rose-500/10 text-rose-400 text-xs border border-rose-500/20 font-bold">
-            {isAr ? '✕ ملغى' : '✕ Cancelled'}
-          </span>
-        );
+  const isAppointmentPast = (dateStr: string, timeStr: string): boolean => {
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    if (dateStr < todayStr) return true;
+    if (dateStr > todayStr) return false;
+    const [h, m] = timeStr.split(':').map(Number);
+    const currentTotalMin = now.getHours() * 60 + now.getMinutes();
+    const slotTotalMin = h * 60 + m;
+    return slotTotalMin < currentTotalMin;
+  };
+
+  const getStatusBadge = (appt: PatientBooking) => {
+    if (appt.status === 'cancelled') {
+      return (
+        <span className="px-2 py-1 rounded-lg bg-rose-500/10 text-rose-400 text-xs border border-rose-500/20 font-bold">
+          {isAr ? '✕ ملغى' : '✕ Cancelled'}
+        </span>
+      );
     }
+
+    const isPast = isAppointmentPast(appt.date, appt.timeSlot);
+    if (isPast) {
+      return (
+        <span className="px-2 py-1 rounded-lg bg-teal-500/10 text-teal-400 text-xs border border-teal-500/20 font-bold">
+          {isAr ? '✓ تم الحضور' : '✓ Attended'}
+        </span>
+      );
+    }
+
+    if (appt.status === 'confirmed') {
+      return (
+        <span className="px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 text-xs border border-emerald-500/20 font-bold">
+          {isAr ? '✓ مؤكد' : '✓ Confirmed'}
+        </span>
+      );
+    }
+
+    // Default: future pending
+    return (
+      <span className="px-2 py-1 rounded-lg bg-amber-500/10 text-amber-400 text-xs border border-amber-500/20 font-bold animate-pulse">
+        {isAr ? '⏳ بانتظار التأكيد' : '⏳ Pending confirmation'}
+      </span>
+    );
   };
 
   const getDeliveryStatusIcon = (status: WhatsAppEvent['status']) => {
@@ -106,7 +128,7 @@ export default function AppointmentsList() {
                     <td className="py-4 text-teal-300 font-bold">
                       {formatPeriodTime(appt.timeSlot)}
                     </td>
-                    <td className="py-4">{getStatusBadge(appt.status)}</td>
+                    <td className="py-4">{getStatusBadge(appt)}</td>
                     <td className="py-4 text-left">
                       <div className="inline-flex gap-2">
                         {appt.status === 'pending' && (

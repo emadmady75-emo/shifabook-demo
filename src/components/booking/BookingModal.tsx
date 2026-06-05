@@ -20,18 +20,34 @@ export default function BookingModal({
   isRescheduling = false,
   rescheduleBookingId = null
 }: BookingModalProps) {
-  const { language, bookAppointment, rescheduleAppointment, bookings } = useBooking();
+  const { 
+    language, 
+    bookAppointment, 
+    rescheduleAppointment, 
+    bookings,
+    verifiedPhone,
+    verifiedName,
+    setPhoneVerified,
+    phoneVerified,
+    checkPhoneBookings
+  } = useBooking();
+
   const isAr = language === 'ar';
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [token, setToken] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showOtp, setShowOtp] = useState(false);
   const [otpInput, setOtpInput] = useState('');
   const [otpError, setOtpError] = useState('');
 
-  // If rescheduling, prefill user's previous info
+  const [intakePhone, setIntakePhone] = useState('');
+  const [intakeError, setIntakeError] = useState('');
+  const [intakeLoading, setIntakeLoading] = useState(false);
+
+  // Prefill phone and name states based on context/rescheduling settings
   React.useEffect(() => {
     if (isRescheduling && rescheduleBookingId) {
       const existing = bookings.find(b => b.id === rescheduleBookingId);
@@ -39,32 +55,29 @@ export default function BookingModal({
         setName(existing.patientName);
         setPhone(existing.mobileNumber);
       }
+    } else {
+      setPhone(verifiedPhone);
+      setName(verifiedName);
     }
-  }, [isRescheduling, rescheduleBookingId, bookings]);
+  }, [isRescheduling, rescheduleBookingId, bookings, verifiedPhone, verifiedName]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleIntakeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    setOtpError('');
+    setIntakeError('');
 
-    // Quick validations
-    if (!name.trim()) {
-      setError(isAr ? 'الرجاء إدخال الاسم الكامل' : 'Please enter your full name');
-      return;
+    const { translateDigits } = await import('@/lib/phone');
+    const translated = translateDigits(intakePhone);
+    let cleaned = translated.replace(/[\s\-]/g, '');
+
+    if (cleaned.startsWith('+20')) {
+      cleaned = '0' + cleaned.slice(3);
+    } else if (cleaned.startsWith('20') && cleaned.length === 12) {
+      cleaned = '0' + cleaned.slice(2);
     }
-    if (name.trim().length < 4) {
-      setError(isAr ? 'الاسم يجب أن لا يقل عن 4 أحرف' : 'Name must be at least 4 characters');
-      return;
-    }
-    
-    // Normalize Egyptian phone: strip spaces/dashes, convert +20/20 prefix to 0
-    let normalizedPhone = phone.replace(/[\s\-]/g, '');
-    if (normalizedPhone.startsWith('+20')) normalizedPhone = '0' + normalizedPhone.slice(3);
-    else if (normalizedPhone.startsWith('20') && normalizedPhone.length === 12) normalizedPhone = '0' + normalizedPhone.slice(2);
 
     const phoneRegex = /^01[0125][0-9]{8}$/;
-    if (!phoneRegex.test(normalizedPhone)) {
-      setError(
+    if (!phoneRegex.test(cleaned)) {
+      setIntakeError(
         isAr 
           ? 'برجاء إدخال رقم موبايل مصري صحيح مثل 01012345678' 
           : 'Please enter a valid Egyptian mobile number (e.g. 01012345678)'
@@ -72,22 +85,108 @@ export default function BookingModal({
       return;
     }
 
-    // WhatsApp OTP step
+    setIntakeLoading(true);
+    try {
+      const { activeBooking: foundActive } = await checkPhoneBookings(translated);
+      if (foundActive) {
+        onClose();
+      }
+    } catch (err) {
+      console.error('Phone check error:', err);
+      setIntakeError(
+        isAr 
+          ? 'عذراً، حدث خطأ أثناء التحقق. يرجى المحاولة مرة أخرى.' 
+          : 'Error checking phone. Please try again.'
+      );
+    } finally {
+      setIntakeLoading(false);
+    }
+  };
+
+  const handleFormSubmit = (e: React.FormEvent) => {
+    if (!phoneVerified && !isRescheduling) {
+      handleIntakeSubmit(e);
+    } else {
+      handleSubmit(e);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setOtpError('');
+
+    const finalPhone = isRescheduling ? phone : verifiedPhone;
+    const finalName = isRescheduling ? name : (verifiedName || name);
+
+    if (!finalName.trim()) {
+      setError(isAr ? 'الرجاء إدخال الاسم الكامل' : 'Please enter your full name');
+      return;
+    }
+    if (finalName.trim().length < 4) {
+      setError(isAr ? 'الاسم يجب أن لا يقل عن 4 أحرف' : 'Name must be at least 4 characters');
+      return;
+    }
+
+    // Step 1: Send OTP code
     if (!showOtp) {
-      setShowOtp(true);
+      setLoading(true);
+      try {
+        const res = await fetch('/api/public/otp/request', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ phone: finalPhone })
+        });
+        const data = await res.json();
+        
+        if (res.ok && data.success) {
+          setToken(data.token);
+          setShowOtp(true);
+        } else {
+          setError(data.error || (isAr ? 'فشل إرسال رمز التحقق' : 'Failed to send verification code'));
+        }
+      } catch (err) {
+        console.error('OTP request error:', err);
+        setError(isAr ? 'فشل الاتصال بخادم التحقق' : 'OTP server connection failed');
+      } finally {
+        setLoading(false);
+      }
       return;
     }
 
-    if (otpInput !== '1234') {
-      setOtpError(isAr ? 'رمز التحقق غير صحيح، يرجى كتابة الرمز التجريبي 1234' : 'Incorrect code, please enter the demo code 1234');
-      return;
-    }
-
+    // Step 2: Verify OTP code
     setLoading(true);
+    try {
+      const res = await fetch('/api/public/otp/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          phone: finalPhone,
+          otp: otpInput,
+          token
+        })
+      });
+      const data = await res.json();
+      
+      if (!res.ok || !data.success) {
+        setOtpError(data.error || (isAr ? 'رمز التحقق غير صحيح' : 'Incorrect verification code'));
+        setLoading(false);
+        return;
+      }
+    } catch (err) {
+      console.error('OTP verification error:', err);
+      setOtpError(isAr ? 'فشل الاتصال بخادم التحقق' : 'OTP server verification failed');
+      setLoading(false);
+      return;
+    }
 
+    // Step 3: Complete Booking
     try {
       if (isRescheduling && rescheduleBookingId) {
-        // Run rescheduling logic
         const moved = await rescheduleAppointment(rescheduleBookingId, selectedDate, selectedTime);
         if (moved) {
           const updatedBooking = bookings.find(b => b.id === rescheduleBookingId);
@@ -103,8 +202,7 @@ export default function BookingModal({
           setLoading(false);
         }
       } else {
-        // Run new booking logic
-        const newBooking = await bookAppointment(name, normalizedPhone, selectedDate, selectedTime);
+        const newBooking = await bookAppointment(finalName, finalPhone, selectedDate, selectedTime);
         onSuccess(newBooking);
       }
     } catch (err: any) {
@@ -169,7 +267,7 @@ export default function BookingModal({
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleFormSubmit} className="p-6 space-y-4">
           
           {/* Error Message */}
           {error && (
@@ -178,7 +276,75 @@ export default function BookingModal({
             </div>
           )}
 
-          {showOtp ? (
+          {!phoneVerified && !isRescheduling ? (
+            <div className="space-y-4">
+              <div className="text-center space-y-2">
+                <h4 className="text-md font-bold text-white">
+                  {isAr ? 'التحقق من رقم الهاتف' : 'Verify Mobile Number'}
+                </h4>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  {isAr 
+                    ? 'يرجى إدخال رقم الهاتف للمتابعة وتأكيد الحجز.'
+                    : 'Please enter your mobile number to check availability and confirm booking.'}
+                </p>
+              </div>
+
+              {intakeError && (
+                <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs font-bold text-rose-400 text-center">
+                  ⚠️ {intakeError}
+                </div>
+              )}
+
+              <div className="space-y-1.5 text-right">
+                <label className="text-xs font-semibold text-slate-300 block">
+                  {isAr ? 'رقم الهاتف المحمول' : 'Mobile Number'}
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    value={intakePhone}
+                    onChange={(e) => {
+                      setIntakePhone(e.target.value);
+                      setIntakeError('');
+                    }}
+                    placeholder={isAr ? 'مثال: ٠١٠٢٠٧٦١٤٢٥' : 'e.g. 01012345678'}
+                    className="w-full px-4 py-3.5 rounded-xl bg-[#09151e] border border-teal-950/60 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-teal-500 text-sm transition-colors text-left font-mono"
+                  />
+                  <div className="absolute inset-y-0 right-3.5 flex items-center pointer-events-none text-slate-500">
+                    <span>🇪🇬</span>
+                  </div>
+                </div>
+                <span className="text-[10px] text-slate-500 block leading-snug">
+                  {isAr 
+                    ? 'يدعم الأرقام العربية (٠-٩) والإنجليزية (0-9). التحقق فوري.' 
+                    : 'Supports Arabic (٠-٩) and English (0-9) digits.'}
+                </span>
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="flex-1 py-3.5 rounded-xl border border-teal-950/60 bg-transparent text-slate-300 font-bold text-sm hover:bg-slate-900 hover:text-white transition-colors"
+                >
+                  {isAr ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  disabled={intakeLoading}
+                  className="flex-[2] py-3.5 rounded-xl bg-gradient-to-tr from-teal-500 to-emerald-400 text-[#070e12] font-black text-sm hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-1.5 shadow-md shadow-teal-500/10"
+                >
+                  {intakeLoading ? (
+                    <div className="w-5 h-5 border-2 border-[#070e12] border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <span>{isAr ? 'متابعة' : 'Continue'}</span>
+                  )}
+                </button>
+              </div>
+            </div>
+          ) : (
+            showOtp ? (
             <div className="space-y-4 text-center">
               {/* WhatsApp Icon */}
               <div className="mx-auto w-16 h-16 bg-emerald-500/10 border border-emerald-500/20 rounded-full flex items-center justify-center text-emerald-400 mb-2 relative">
@@ -198,14 +364,8 @@ export default function BookingModal({
                   : `Enter the code sent to ${phone} on WhatsApp`}
               </p>
 
-              <div className="p-2.5 bg-slate-900 border border-teal-500/20 rounded-xl max-w-xs mx-auto">
-                <span className="text-xs font-semibold text-teal-400">
-                  {isAr ? '💡 الرمز التجريبي لتأكيد الحجز: 1234' : '💡 Demo verification code: 1234'}
-                </span>
-              </div>
-
               {/* OTP Code Input */}
-              <div className="max-w-[180px] mx-auto space-y-1.5">
+              <div className="max-w-[180px] mx-auto space-y-1.5 pt-2">
                 <input
                   type="text"
                   maxLength={4}
@@ -227,7 +387,7 @@ export default function BookingModal({
               )}
 
               {/* Call to Actions for OTP */}
-              <div className="pt-2 flex gap-3">
+              <div className="pt-4 flex gap-3">
                 <button
                   type="button"
                   onClick={() => {
@@ -254,46 +414,50 @@ export default function BookingModal({
             </div>
           ) : (
             <>
-              {/* Full Name Input */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-300 block text-right">
-                  {isAr ? 'الاسم الكامل للمريض' : 'Patient Full Name'}
-                </label>
-                <input
-                  type="text"
-                  required
-                  disabled={isRescheduling} // Lock name on reschedule to keep history clean
-                  placeholder={isAr ? 'مثال: احمد حسن عبد الواحد' : 'e.g. Ahmed Hassan Abd Elwahed'}
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl bg-[#09151e] border border-teal-950/60 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-teal-500 text-sm transition-colors text-right"
-                />
-              </div>
+              {/* Welcome Back Card for Returning Patients */}
+              {verifiedName && !isRescheduling && (
+                <div className="p-4 rounded-2xl bg-teal-950/10 border border-teal-900/30 text-right space-y-1">
+                  <span className="text-[10px] text-slate-500 block">{isAr ? 'مرحباً بك مجدداً:' : 'Welcome back:'}</span>
+                  <span className="font-bold text-white text-sm block">{verifiedName}</span>
+                  <span className="text-[10px] text-teal-400 block">{isAr ? 'سيتم ربط هذا الموعد بملفك الطبي الحالي تلقائياً.' : 'This appointment will be linked to your medical profile.'}</span>
+                </div>
+              )}
 
-              {/* Mobile Number Input */}
+              {/* Full Name Input (Only if name is not already known) */}
+              {(!verifiedName || isRescheduling) && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-300 block text-right">
+                    {isAr ? 'الاسم الكامل للمريض' : 'Patient Full Name'}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    disabled={isRescheduling}
+                    placeholder={isAr ? 'مثال: احمد حسن عبد الواحد' : 'e.g. Ahmed Hassan Abd Elwahed'}
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl bg-[#09151e] border border-teal-950/60 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-teal-500 text-sm transition-colors text-right"
+                  />
+                </div>
+              )}
+
+              {/* Mobile Number Input (Read-only since it is already entered) */}
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-slate-300 block text-right">
-                  {isAr ? 'رقم الموبايل (لتأكيد الموعد عبر الواتساب)' : 'Mobile Phone (for WhatsApp confirmation)'}
+                  {isAr ? 'رقم الهاتف المحمول' : 'Mobile Phone'}
                 </label>
                 <div className="relative">
                   <input
                     type="tel"
                     required
-                    disabled={isRescheduling}
-                    placeholder="01012345678"
+                    disabled
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl bg-[#09151e] border border-teal-950/60 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-teal-500 text-sm transition-colors text-right"
+                    className="w-full px-4 py-3 rounded-xl bg-[#09151e] border border-teal-950/40 text-slate-400 focus:outline-none text-sm text-right cursor-not-allowed"
                   />
-                  <span className={`absolute top-1/2 -translate-y-1/2 text-xs font-bold text-teal-500/70 pointer-events-none ${isAr ? 'left-4' : 'right-4'}`}>
-                    {isAr ? 'موبايل' : 'Mobile'}
+                  <span className={`absolute top-1/2 -translate-y-1/2 text-xs font-bold text-teal-500/50 pointer-events-none ${isAr ? 'left-4' : 'right-4'}`}>
+                    {isAr ? 'مؤكد' : 'Verified'}
                   </span>
                 </div>
-                <p className="text-[10px] text-slate-500 mt-1 text-right">
-                  {isAr 
-                    ? 'ملاحظة: سنقوم بإرسال تأكيد الحجز الفوري وتذكيرات مجانية لموعدك عبر الواتساب.' 
-                    : 'Note: We will send instant confirmation and free reminders directly to your WhatsApp.'}
-                </p>
               </div>
 
               {/* Pricing Info */}
@@ -317,13 +481,18 @@ export default function BookingModal({
                 </button>
                 <button
                   type="submit"
+                  disabled={loading}
                   className="flex-[2] py-3.5 rounded-xl bg-gradient-to-tr from-teal-500 to-emerald-400 text-[#070e12] font-black text-sm hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-1.5 shadow-md shadow-teal-500/10"
                 >
-                  <span>{isAr ? 'احصل على رمز التحقق' : 'Get Verification Code'}</span>
+                  {loading ? (
+                    <div className="w-5 h-5 border-2 border-[#070e12] border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <span>{isAr ? 'احصل على رمز التحقق' : 'Get Verification Code'}</span>
+                  )}
                 </button>
               </div>
             </>
-          )}
+          ))}
 
         </form>
 

@@ -1,24 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-
-function normalizePhone(phone: string): string {
-  // Remove spaces, dashes, parentheses, or any non-numeric character except '+'
-  let cleaned = phone.replace(/[^\d+]/g, '');
-  
-  if (cleaned.startsWith('0')) {
-    // Replace leading '0' with '+20' (Egypt's country code)
-    cleaned = '+20' + cleaned.substring(1);
-  } else if (cleaned.startsWith('20') && !cleaned.startsWith('+')) {
-    cleaned = '+' + cleaned;
-  } else if (!cleaned.startsWith('+')) {
-    if (cleaned.length === 10 && cleaned.startsWith('1')) {
-      cleaned = '+20' + cleaned;
-    } else {
-      cleaned = '+' + cleaned;
-    }
-  }
-  return cleaned;
-}
+import { normalizePhone } from '@/lib/phone';
 
 export async function POST(request: NextRequest) {
   try {
