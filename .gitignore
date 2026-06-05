@@ -5,3 +5,4 @@ n8n-mcp/
 .env.local
 .DS_Store
 *.log
+public/_next/
