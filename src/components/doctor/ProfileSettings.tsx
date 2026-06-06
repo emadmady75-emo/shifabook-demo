@@ -39,6 +39,18 @@ export default function ProfileSettings({ doctor, language }: ProfileSettingsPro
     setLoading(true);
     setMessage(null);
 
+    // URL Validation
+    if (profileImageUrl && !profileImageUrl.startsWith('http://') && !profileImageUrl.startsWith('https://')) {
+      setMessage({
+        type: 'error',
+        text: isAr 
+          ? 'يرجى إدخال رابط صورة صالح يبدأ بـ http أو https' 
+          : 'Please enter a valid image URL starting with http or https',
+      });
+      setLoading(false);
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('doctors')
@@ -69,11 +81,34 @@ export default function ProfileSettings({ doctor, language }: ProfileSettingsPro
       // Refresh the page data server-side
       router.refresh();
     } catch (err: any) {
-      console.error('Error updating doctor profile:', err);
-      setMessage({
-        type: 'error',
-        text: isAr ? `فشل تحديث البيانات: ${err.message || ''}` : `Failed to update profile: ${err.message || ''}`,
+      console.error('Error updating doctor profile details:', {
+        message: err?.message,
+        code: err?.code,
+        details: err?.details,
+        hint: err?.hint,
+        error: err
       });
+
+      const isMissingColumn = 
+        err?.code === 'PGRST111' || 
+        (err?.message && (
+          err.message.toLowerCase().includes('profile_image_url') || 
+          (err.message.toLowerCase().includes('column') && err.message.toLowerCase().includes('not found'))
+        ));
+
+      if (isMissingColumn) {
+        setMessage({
+          type: 'error',
+          text: isAr 
+            ? 'يجب إضافة حقل صورة الطبيب في قاعدة البيانات أولاً' 
+            : 'The doctor profile image column must be added to the database first',
+        });
+      } else {
+        setMessage({
+          type: 'error',
+          text: isAr ? `فشل تحديث البيانات: ${err.message || ''}` : `Failed to update profile: ${err.message || ''}`,
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -191,6 +226,35 @@ export default function ProfileSettings({ doctor, language }: ProfileSettingsPro
               onChange={(e) => setProfileImageUrl(e.target.value)}
               className="w-full px-4 py-3 rounded-xl bg-[#09151e] border border-teal-950/60 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-teal-500 text-sm transition-colors text-right ltr"
             />
+            {/* Live Image Preview */}
+            <div className="flex items-center gap-4 mt-3 p-3.5 rounded-2xl bg-[#09151e]/40 border border-teal-950/40">
+              <div className="relative w-16 h-16 rounded-2xl overflow-hidden bg-slate-800 border border-teal-500/20 flex-shrink-0 flex items-center justify-center">
+                {profileImageUrl && (profileImageUrl.startsWith('http://') || profileImageUrl.startsWith('https://')) ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={profileImageUrl}
+                    alt="Preview"
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = 'none';
+                    }}
+                  />
+                ) : null}
+                {(!profileImageUrl || (!profileImageUrl.startsWith('http://') && !profileImageUrl.startsWith('https://'))) && (
+                  <svg className="w-8 h-8 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+                  </svg>
+                )}
+              </div>
+              <div className="text-right">
+                <p className="text-xs font-bold text-slate-200">
+                  {isAr ? 'معاينة الصورة المباشرة' : 'Live Image Preview'}
+                </p>
+                <p className="text-[10px] text-slate-500 mt-0.5">
+                  {isAr ? 'ستظهر هذه الصورة في الصفحة الرئيسية وصفحة الطبيب.' : 'This photo will appear on the homepage and doctor profile.'}
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* Clinic Name */}
