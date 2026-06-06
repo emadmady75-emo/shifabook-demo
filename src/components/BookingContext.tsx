@@ -158,9 +158,57 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const storedLang = localStorage.getItem('shifabook_lang');
     const storedFacility = localStorage.getItem('shifabook_facility');
 
-    if (storedConfig) setScheduleConfig(JSON.parse(storedConfig));
-    if (storedActiveId) setActiveBookingId(storedActiveId);
-    if (storedActiveBooking) setActiveBooking(JSON.parse(storedActiveBooking));
+    if (storedConfig) {
+      try {
+        setScheduleConfig(JSON.parse(storedConfig));
+      } catch (e) {
+        console.error('Failed to parse stored config:', e);
+      }
+    }
+
+    let parsedActiveBooking: PatientBooking | null = null;
+    let validActiveId: string | null = null;
+
+    if (storedActiveBooking) {
+      try {
+        const parsed = JSON.parse(storedActiveBooking);
+        if (
+          parsed &&
+          typeof parsed === 'object' &&
+          parsed.id &&
+          typeof parsed.id === 'string' &&
+          parsed.id.length === 36 &&
+          !parsed.id.startsWith('appt-') &&
+          parsed.patientName &&
+          parsed.date &&
+          parsed.timeSlot
+        ) {
+          parsedActiveBooking = parsed;
+          validActiveId = parsed.id;
+        } else {
+          console.warn('Invalid or legacy active booking details format in localStorage, clearing.');
+        }
+      } catch (e) {
+        console.error('Failed to parse stored active booking details:', e);
+      }
+    }
+
+    if (storedActiveId && storedActiveId.startsWith('appt-')) {
+      console.warn('Legacy active booking ID detected, clearing.');
+      validActiveId = null;
+      parsedActiveBooking = null;
+    }
+
+    if (validActiveId && parsedActiveBooking && parsedActiveBooking.id === validActiveId) {
+      setActiveBookingId(validActiveId);
+      setActiveBooking(parsedActiveBooking);
+    } else {
+      localStorage.removeItem('shifabook_active_booking');
+      localStorage.removeItem('shifabook_active_booking_details');
+      setActiveBookingId(null);
+      setActiveBooking(null);
+    }
+
     if (storedLang) setLanguage(storedLang as 'ar' | 'en');
     if (storedFacility) {
       try {
@@ -329,8 +377,11 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           throw new Error(error.message || "Failed to insert appointment into Supabase");
         }
 
-        if (insertedData && insertedData.length > 0) {
+        if (insertedData && insertedData[0] && insertedData[0].id) {
           bookedId = insertedData[0].id;
+        } else {
+          console.warn("Supabase insert succeeded but returned no data or missing ID, using fallback UUID");
+          bookedId = crypto.randomUUID();
         }
 
         // Sync patient profile to `patients` table
@@ -531,7 +582,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!targetId) return;
 
     // If it's a Supabase UUID
-    if (targetId.length === 36) {
+    if (typeof targetId === 'string' && targetId.length === 36) {
       try {
         const { createClient } = await import('@/lib/supabase/client');
         const supabase = createClient();

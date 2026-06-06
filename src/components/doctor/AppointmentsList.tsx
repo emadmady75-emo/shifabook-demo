@@ -15,14 +15,21 @@ export default function AppointmentsList() {
   const cancelledBookings = bookings.filter(b => b.status === 'cancelled').sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
   const formatPeriodTime = (timeStr: string) => {
+    if (!timeStr || typeof timeStr !== 'string' || !timeStr.includes(':')) {
+      return '';
+    }
     const [h, m] = timeStr.split(':');
     const hr = parseInt(h);
+    if (isNaN(hr)) return '';
     const suffix = isAr ? (hr >= 12 ? 'م' : 'ص') : (hr >= 12 ? 'PM' : 'AM');
     const displayHr = hr > 12 ? hr - 12 : hr === 0 ? 12 : hr;
     return `${displayHr}:${m} ${suffix}`;
   };
 
   const isAppointmentPast = (dateStr: string, timeStr: string): boolean => {
+    if (!dateStr || !timeStr || typeof timeStr !== 'string' || !timeStr.includes(':')) {
+      return false;
+    }
     const now = new Date();
     const todayStr = formatDateOnly(now);
     if (dateStr < todayStr) return true;

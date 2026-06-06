@@ -67,8 +67,12 @@ export default function DoctorPublicBookingPage() {
   };
 
   const formatPeriodTime = (timeStr: string) => {
+    if (!timeStr || typeof timeStr !== 'string' || !timeStr.includes(':')) {
+      return '';
+    }
     const [h, m] = timeStr.split(':');
     const hr = parseInt(h);
+    if (isNaN(hr)) return '';
     const suffix = isAr ? (hr >= 12 ? 'م' : 'ص') : (hr >= 12 ? 'PM' : 'AM');
     const displayHr = hr > 12 ? hr - 12 : hr === 0 ? 12 : hr;
     return `${displayHr}:${m} ${suffix}`;
