@@ -97,7 +97,7 @@ export default function DoctorPublicBookingPage() {
                 <img
                   src={doctorProfile.avatar}
                   alt={getDoctorDisplayName()}
-                  className="w-24 h-24 rounded-2xl object-cover border-2 border-teal-500/30"
+                  className="w-28 h-28 md:w-32 md:h-32 rounded-3xl object-cover border-3 border-teal-500/25 shadow-xl shadow-black/50"
                 />
                 
                 <div className="space-y-2">

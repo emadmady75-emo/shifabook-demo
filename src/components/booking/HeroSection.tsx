@@ -116,7 +116,7 @@ export default function HeroSection() {
                   <img
                     src={doctorProfile.avatar}
                     alt={isAr ? doctorProfile.name : doctorProfile.nameEn}
-                    className="w-32 h-32 sm:w-36 sm:h-36 rounded-3xl object-cover border-3 border-teal-500/25 shadow-xl shadow-black/40 group-hover:border-teal-500/40 transition-colors duration-300"
+                    className="w-32 h-32 sm:w-36 sm:h-36 rounded-3xl object-cover border-4 border-teal-500/25 ring-4 ring-teal-500/5 shadow-2xl shadow-black/60 group-hover:border-teal-500/40 group-hover:ring-teal-500/15 transition-all duration-300 group-hover:scale-[1.02]"
                   />
                   {/* Active Pulse Online Badge */}
                   <div className="absolute -bottom-1 -end-1 w-6.5 h-6.5 rounded-full bg-emerald-500 border-4 border-[#0b171f] flex items-center justify-center shadow-lg">
