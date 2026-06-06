@@ -427,20 +427,26 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         // Trigger Next.js API route as a secure bridge for WhatsApp notification
         try {
+          const bookingId = insertedData && insertedData.length > 0 ? insertedData[0].id : '';
           fetch('/api/public/whatsapp', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-              doctor_id: doctorId,
-              patient_name: name,
-              patient_phone: phone,
-              appointment_date: date,
-              appointment_time: time,
-              facility_name: language === 'ar' ? selectedFacility.name : selectedFacility.nameEn,
-              facility_address: language === 'ar' ? selectedFacility.address : selectedFacility.addressEn,
-              facility_map_url: selectedFacility.mapUrl
+              event_type: 'booking.created',
+              data: {
+                patient_name: name,
+                patient_phone: phone,
+                doctor_name: language === 'ar' ? doctorProfile.name : doctorProfile.nameEn,
+                specialization: language === 'ar' ? doctorProfile.specialization : doctorProfile.specializationEn,
+                appointment_date: date,
+                appointment_time: time,
+                facility_name: language === 'ar' ? selectedFacility.name : selectedFacility.nameEn,
+                facility_address: language === 'ar' ? selectedFacility.address : selectedFacility.addressEn,
+                facility_map_url: selectedFacility.mapUrl,
+                booking_id: bookingId
+              }
             })
           }).catch(err => {
             console.error('Non-blocking WhatsApp API trigger error:', err);
@@ -521,10 +527,6 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
 
         // Trigger WhatsApp webhook bridge for rescheduling
-        const oldFacilityName = bookingToMove.facilityName || (language === 'ar' ? DEMO_FACILITIES[0].name : DEMO_FACILITIES[0].nameEn);
-        const newFacilityName = language === 'ar' ? selectedFacility.name : selectedFacility.nameEn;
-        const newFacilityMapUrl = selectedFacility.mapUrl;
-
         try {
           fetch('/api/public/whatsapp', {
             method: 'POST',
@@ -532,19 +534,21 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-              doctor_id: doctorProfile?.id,
-              patient_name: bookingToMove.patientName,
-              patient_phone: bookingToMove.mobileNumber,
-              appointment_date: newDate,
-              appointment_time: newTime,
-              is_rescheduled: true,
-              old_facility_name: oldFacilityName,
-              new_facility_name: newFacilityName,
-              old_appointment_date: bookingToMove.date,
-              old_appointment_time: bookingToMove.timeSlot,
-              facility_name: newFacilityName,
-              facility_address: language === 'ar' ? selectedFacility.address : selectedFacility.addressEn,
-              facility_map_url: newFacilityMapUrl
+              event_type: 'booking.rescheduled',
+              data: {
+                patient_name: bookingToMove.patientName,
+                patient_phone: bookingToMove.mobileNumber,
+                doctor_name: language === 'ar' ? doctorProfile.name : doctorProfile.nameEn,
+                specialization: language === 'ar' ? doctorProfile.specialization : doctorProfile.specializationEn,
+                old_appointment_date: bookingToMove.date,
+                old_appointment_time: bookingToMove.timeSlot,
+                new_appointment_date: newDate,
+                new_appointment_time: newTime,
+                facility_name: language === 'ar' ? selectedFacility.name : selectedFacility.nameEn,
+                facility_address: language === 'ar' ? selectedFacility.address : selectedFacility.addressEn,
+                facility_map_url: selectedFacility.mapUrl,
+                booking_id: bookingId
+              }
             })
           }).catch(err => {
             console.error('Non-blocking WhatsApp API reschedule trigger error:', err);
@@ -605,18 +609,29 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         // Trigger WhatsApp cancellation event
         if (data) {
           try {
+            const facility = DEMO_FACILITIES.find(f => f.id === data.facility_id) || DEMO_FACILITIES[0];
+            const cancelledBy = typeof window !== 'undefined' && window.location.pathname.startsWith('/doctor') ? 'doctor' : 'patient';
+
             fetch('/api/public/whatsapp', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json'
               },
               body: JSON.stringify({
-                doctor_id: data.doctor_id,
-                patient_name: data.patient_name,
-                patient_phone: data.patient_phone,
-                appointment_date: data.appointment_date,
-                appointment_time: data.appointment_time,
-                is_cancelled: true
+                event_type: 'booking.cancelled',
+                data: {
+                  patient_name: data.patient_name,
+                  patient_phone: data.patient_phone,
+                  doctor_name: language === 'ar' ? doctorProfile.name : doctorProfile.nameEn,
+                  specialization: language === 'ar' ? doctorProfile.specialization : doctorProfile.specializationEn,
+                  appointment_date: data.appointment_date,
+                  appointment_time: data.appointment_time,
+                  facility_name: language === 'ar' ? facility.name : facility.nameEn,
+                  facility_address: language === 'ar' ? facility.address : facility.addressEn,
+                  facility_map_url: facility.mapUrl,
+                  booking_id: data.id,
+                  cancelled_by: cancelledBy
+                }
               })
             }).catch(err => {
               console.error('Non-blocking WhatsApp API cancellation trigger error:', err);
@@ -738,6 +753,9 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       
       const formattedSlotTime = formatTimeHelper(b.timeSlot);
 
+      const docName = language === 'ar' ? doctorProfile.name : doctorProfile.nameEn;
+      const spec = language === 'ar' ? doctorProfile.specialization : doctorProfile.specializationEn;
+
       events.push({
         id: `wa-created-${b.id}`,
         timestamp: createdTime,
@@ -745,8 +763,8 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         patientName: b.patientName,
         phone: b.mobileNumber,
         message: language === 'ar' 
-          ? `يا هلا يا ${b.patientName}، حجزك المبدئي مع د. عبدالله المصري (استشاري طب وجراحة القلب والأوعية الدموية) تم بنجاح في شفاء بوك. 🩺\n\n📅 الموعد: يوم ${b.date} الساعة ${formattedSlotTime}\n📍 المكان: ${b.facilityName || 'فرع العيادة'} (${b.facilityAddress || ''})\n🗺️ لوكيشن العيادة: ${b.facilityMapUrl || ''}\n\nيرجى الرد برقم 1 لتأكيد الحضور. تشرفنا بزيارتك!`
-          : `Hello ${b.patientName}, your initial booking with Dr. Abdullah El-Masry (Consultant Cardiologist) has been registered. 🩺\n\n📅 Date: ${b.date} at ${formattedSlotTime}\n📍 Branch: ${b.facilityName || ''} (${b.facilityAddress || ''})\n🗺️ Location Map: ${b.facilityMapUrl || ''}\n\nPlease reply with 1 to confirm.`,
+          ? `مرحباً ${b.patientName} 👋\n\nتم تأكيد حجزك بنجاح في شفاء بوك.\n\n👨‍⚕️ الطبيب: ${docName}\n🩺 التخصص: ${spec}\n\n📅 التاريخ: ${b.date}\n⏰ الوقت: ${formattedSlotTime}\n\n📍 العيادة: ${b.facilityName || 'فرع المهندسين'}\nالعنوان: ${b.facilityAddress || 'شارع جامعة الدول العربية، المهندسين'}\n🗺️ اللوكيشن:\n${b.facilityMapUrl || 'https://maps.google.com/?q=30.052,31.200'}\n\nشكراً لاستخدامك شفاء بوك.`
+          : `Hello ${b.patientName} 👋\n\nYour appointment has been successfully confirmed at ShifaBook.\n\n👨‍⚕️ Doctor: ${docName}\n🩺 Specialty: ${spec}\n\n📅 Date: ${b.date}\n⏰ Time: ${formattedSlotTime}\n\n📍 Clinic: ${b.facilityName || 'Mohandessin Branch'}\nAddress: ${b.facilityAddress || ''}\n🗺️ Location Map:\n${b.facilityMapUrl || ''}\n\nThank you for using ShifaBook.`,
         status: b.status === 'pending' ? 'sent' : 'replied'
       });
 
@@ -763,8 +781,8 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           patientName: b.patientName,
           phone: b.mobileNumber,
           message: language === 'ar'
-            ? `مرحباً ${b.patientName} 👋\n\nتم نقل موعدك بنجاح مع د. عبدالله المصري.\n\n📅 الموعد الجديد: ${b.date}\n⏰ الوقت الجديد: ${formattedSlotTime}\n\n📍 العنوان: ${b.facilityAddress || ''}\n🗺️ اللوكيشن: ${b.facilityMapUrl || ''}\n\nفي انتظارك وبنتمنى لك دوام الصحة 🌷`
-            : `Hello ${b.patientName} 👋\n\nYour appointment with Dr. Abdullah El-Masry has been rescheduled successfully.\n\n📅 New Date: ${b.date}\n⏰ New Time: ${formattedSlotTime}\n\n📍 Address: ${b.facilityAddress || ''}\n🗺️ Map: ${b.facilityMapUrl || ''}\n\nLooking forward to seeing you. Wish you good health 🌷`,
+            ? `مرحباً ${b.patientName} 👋\n\nتم نقل موعدك بنجاح في شفاء بوك.\n\n👨‍⚕️ الطبيب: ${docName}\n\nالموعد السابق:\n📅 ${b.date}\n⏰ ${formattedSlotTime}\n\nالموعد الجديد:\n📅 ${b.date}\n⏰ ${formattedSlotTime}\n\n📍 العيادة: ${b.facilityName || 'فرع المهندسين'}\nالعنوان: ${b.facilityAddress || ''}\n🗺️ اللوكيشن:\n${b.facilityMapUrl || ''}\n\nنتشرف بحضورك في الموعد الجديد.`
+            : `Hello ${b.patientName} 👋\n\nYour appointment has been successfully rescheduled at ShifaBook.\n\n👨‍⚕️ Doctor: ${docName}\n\nPrevious Slot:\n📅 ${b.date}\n⏰ ${formattedSlotTime}\n\nNew Slot:\n📅 ${b.date}\n⏰ ${formattedSlotTime}\n\n📍 Clinic: ${b.facilityName || ''}\nAddress: ${b.facilityAddress || ''}\n🗺️ Location Map:\n${b.facilityMapUrl || ''}\n\nLooking forward to seeing you at the new slot.`,
           status: 'read'
         });
       }
@@ -782,8 +800,8 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           patientName: b.patientName,
           phone: b.mobileNumber,
           message: language === 'ar'
-            ? `مرحباً ${b.patientName} 👋\n\nتم إلغاء موعدك مع د. عبدالله المصري بنجاح.\n\n📅 الموعد الملغي: ${b.date}\n⏰ الوقت: ${formattedSlotTime}\n\nتقدر تحجز موعد جديد في أي وقت من هنا:\nhttps://shifabook-demo.vercel.app/book/dr-ahmed\n\nنتمنى لك دوام الصحة 🌷`
-            : `Hello ${b.patientName} 👋\n\nYour appointment with Dr. Abdullah El-Masry has been cancelled successfully.\n\n📅 Cancelled Date: ${b.date}\n⏰ Time: ${formattedSlotTime}\n\nYou can book a new slot anytime here:\nhttps://shifabook-demo.vercel.app/book/dr-ahmed\n\nWish you good health 🌷`,
+            ? `مرحباً ${b.patientName} 👋\n\nتم إلغاء موعدك في شفاء بوك.\n\n👨‍⚕️ الطبيب: ${docName}\n📅 التاريخ: ${b.date}\n⏰ الوقت: ${formattedSlotTime}\n\n📍 العيادة: ${b.facilityName || 'فرع المهندسين'}\nالعنوان: ${b.facilityAddress || ''}\n\nيمكنك حجز موعد جديد في أي وقت من خلال صفحة الحجز.\n\nشكراً لاستخدامك شفاء بوك.`
+            : `Hello ${b.patientName} 👋\n\nYour appointment has been cancelled at ShifaBook.\n\n👨‍⚕️ Doctor: ${docName}\n📅 Date: ${b.date}\n⏰ Time: ${formattedSlotTime}\n\n📍 Clinic: ${b.facilityName || ''}\nAddress: ${b.facilityAddress || ''}\n\nYou can book a new slot anytime via the booking page.\n\nThank you for using ShifaBook.`,
           status: 'sent'
         });
       }
