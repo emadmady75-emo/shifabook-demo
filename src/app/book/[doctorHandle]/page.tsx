@@ -139,16 +139,39 @@ export default function DoctorPublicBookingPage() {
             </div>
           </div>
 
-          {/* Section Header */}
-          <div id="public-booking-grid-section" className="text-center space-y-2">
-            <h2 className="text-2xl sm:text-3xl font-black text-white">
-              {isAr ? 'جدول المواعيد الشاغرة ومقاعد الاستشارة' : 'Available Time Slots & Consultation Seats'}
+          {/* Section Header with Trust Steps Strip */}
+          <div id="public-booking-grid-section" className="text-center space-y-4 max-w-3xl mx-auto mb-6">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-teal-500/20 bg-teal-500/5 text-teal-300 text-xs font-bold mb-1">
+              <svg className="w-3.5 h-3.5 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              {isAr ? 'خريطة المقاعد التفاعلية للمواعيد' : 'Interactive Seat Map for Booking'}
+            </div>
+            
+            <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight leading-none">
+              {isAr ? 'اختر مقعد كشفك واحجز في ثوانٍ' : 'Select Your Seat & Book Instantly'}
             </h2>
-            <p className="text-xs text-slate-400">
-              {isAr 
-                ? 'استخدم المخطط البصري بالأسفل لتحديد المقعد والوقت المناسب لك.' 
-                : 'Use the interactive visual layout below to select your seat slot.'}
-            </p>
+            
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-teal-950/30 border border-teal-900/40 text-xs font-semibold text-teal-400">
+              <span>✈️</span>
+              <span>{isAr ? 'مفهوم حجز مقاعد الطيران: كل مقعد = موعد فردي مخصص مع الطبيب' : 'Flight-style seating: Each seat = a dedicated 1-on-1 consultation slot'}</span>
+            </div>
+
+            {/* Three-step trust/explanation strip */}
+            <div className="grid grid-cols-3 gap-2 max-w-xl mx-auto pt-4 text-xs font-bold" dir={isAr ? "rtl" : "ltr"}>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-1.5 p-2 rounded-xl bg-slate-900/30 border border-teal-950/30 text-slate-300">
+                <span className="w-5 h-5 rounded-full bg-teal-500/10 text-teal-300 flex items-center justify-center text-[10px] font-black border border-teal-500/25">١</span>
+                <span>{isAr ? 'اختار اليوم والفرع' : 'Choose Day & Branch'}</span>
+              </div>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-1.5 p-2 rounded-xl bg-slate-900/30 border border-teal-950/30 text-slate-300">
+                <span className="w-5 h-5 rounded-full bg-teal-500/10 text-teal-300 flex items-center justify-center text-[10px] font-black border border-teal-500/25">٢</span>
+                <span>{isAr ? 'اختار مقعد الحجز' : 'Select Seating Slot'}</span>
+              </div>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-1.5 p-2 rounded-xl bg-slate-900/30 border border-teal-950/30 text-slate-300">
+                <span className="w-5 h-5 rounded-full bg-emerald-500/10 text-emerald-300 flex items-center justify-center text-[10px] font-black border border-emerald-500/25">٣</span>
+                <span>{isAr ? 'تأكيد واتساب فوري' : 'Instant WhatsApp Confirm'}</span>
+              </div>
+            </div>
           </div>
 
           {/* Rescheduling Active Banner Alert */}

@@ -181,3 +181,6 @@ CREATE TRIGGER trigger_sync_appointment_patient
 BEFORE INSERT ON appointments
 FOR EACH ROW
 EXECUTE FUNCTION sync_appointment_patient();
+
+-- 8. Add profile_image_url to doctors table
+ALTER TABLE doctors ADD COLUMN IF NOT EXISTS profile_image_url TEXT;

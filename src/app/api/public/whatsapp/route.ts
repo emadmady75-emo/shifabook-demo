@@ -35,16 +35,30 @@ export async function POST(request: NextRequest) {
     // Initialize Supabase Client with service role key to bypass RLS on server
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
+    // Fetch doctor name
+    const { data: doctorRow } = await supabase
+      .from('doctors')
+      .select('full_name')
+      .eq('id', doctor_id)
+      .single();
+    const verifiedDoctorName = doctorRow?.full_name || 'د. عبدالله المصري';
+
     // Verify appointment exists in Supabase database before forwarding to n8n
-    const { data: appointments, error: dbError } = await supabase
+    let query = supabase
       .from('appointments')
       .select('patient_name')
       .eq('doctor_id', doctor_id)
       .eq('patient_phone', patient_phone)
       .eq('appointment_date', appointment_date)
-      .eq('appointment_time', appointment_time)
-      .neq('status', 'cancelled')
-      .limit(1);
+      .eq('appointment_time', appointment_time);
+
+    if (payload.is_cancelled) {
+      query = query.eq('status', 'cancelled');
+    } else {
+      query = query.neq('status', 'cancelled');
+    }
+
+    const { data: appointments, error: dbError } = await query.limit(1);
 
     if (dbError) {
       console.error('Database verification query error:', dbError);
@@ -52,7 +66,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!appointments || appointments.length === 0) {
-      console.warn('Appointment verification failed: No matching active booking found for verification payload.');
+      console.warn('Appointment verification failed: No matching booking found for verification payload.');
       return NextResponse.json({ error: 'Appointment verification failed. Booking does not exist.' }, { status: 404 });
     }
 
@@ -67,10 +81,21 @@ export async function POST(request: NextRequest) {
     }
 
     const outboundPayload = {
-      event_type: is_rescheduled ? 'booking.rescheduled' : 'booking.created',
+      event_type: payload.is_cancelled 
+        ? 'booking.cancelled' 
+        : (is_rescheduled ? 'booking.rescheduled' : 'booking.created'),
       timestamp: new Date().toISOString(),
-      data: is_rescheduled ? {
+      data: payload.is_cancelled ? {
         doctor_id,
+        doctor_name: verifiedDoctorName,
+        patient_name: verifiedPatientName,
+        patient_phone: normalizedPhone,
+        appointment_date,
+        appointment_time,
+        booking_url: `https://shifabook-demo.vercel.app/book/dr-ahmed`
+      } : (is_rescheduled ? {
+        doctor_id,
+        doctor_name: verifiedDoctorName,
         patient_name: verifiedPatientName,
         patient_phone: normalizedPhone,
         old_facility_name: old_facility_name || facility_name || '',
@@ -80,16 +105,19 @@ export async function POST(request: NextRequest) {
         new_appointment_date: appointment_date,
         new_appointment_time: appointment_time,
         facility_name: new_facility_name || facility_name || '',
+        facility_address: payload.facility_address || '',
         facility_map_url: facility_map_url || ''
       } : {
         doctor_id,
+        doctor_name: verifiedDoctorName,
         patient_name: verifiedPatientName,
         patient_phone: normalizedPhone,
         appointment_date,
         appointment_time,
         facility_name: facility_name || '',
+        facility_address: payload.facility_address || '',
         facility_map_url: facility_map_url || ''
-      }
+      })
     };
 
     // Forward to n8n in a non-blocking try-catch (failures should not block client responses)

@@ -103,80 +103,87 @@ export default function HeroSection() {
 
           {/* ─── Doctor Profile Card ─── */}
           <div className="lg:col-span-5 flex justify-center order-1 lg:order-2">
-            <div className="w-full max-w-sm sm:max-w-md glass-panel rounded-3xl p-6 relative overflow-hidden shadow-2xl shadow-teal-950/30">
+            <div className="w-full max-w-sm sm:max-w-md glass-panel rounded-[2rem] p-7 relative overflow-hidden shadow-2xl shadow-teal-500/5 border border-teal-500/30 hover:border-teal-500/50 transition-all duration-300 group">
 
-              {/* Subtle card inner glow */}
-              <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-teal-500/40 to-transparent" />
+              {/* Glowing header accent */}
+              <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-teal-500 via-emerald-400 to-teal-500" />
+              <div className="absolute -top-10 -left-10 w-32 h-32 bg-teal-500/10 rounded-full blur-2xl group-hover:bg-teal-500/15 transition-all duration-300" />
 
               {/* Doctor Avatar & Online Status */}
-              <div className="flex items-start gap-4">
+              <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-right gap-5">
                 <div className="relative flex-shrink-0">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={doctorProfile.avatar}
                     alt={isAr ? doctorProfile.name : doctorProfile.nameEn}
-                    className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover border-2 border-teal-500/30"
+                    className="w-28 h-28 sm:w-32 sm:h-32 rounded-3xl object-cover border-3 border-teal-500/25 shadow-xl shadow-black/40 group-hover:border-teal-500/40 transition-colors duration-300"
                   />
-                  {/* Online Badge */}
-                  <div className="absolute -bottom-1 -end-1 w-6 h-6 rounded-full bg-emerald-500 border-4 border-[#0b171f] flex items-center justify-center">
+                  {/* Active Pulse Online Badge */}
+                  <div className="absolute -bottom-1 -end-1 w-6.5 h-6.5 rounded-full bg-emerald-500 border-4 border-[#0b171f] flex items-center justify-center shadow-lg">
                     <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
                   </div>
                 </div>
 
-                <div className="space-y-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-teal-500/15 text-teal-300 border border-teal-500/20">
-                      {isAr ? 'متاح الآن' : 'Available Now'}
+                <div className="space-y-2 min-w-0 flex-grow">
+                  <div className="flex items-center justify-center sm:justify-start gap-2 flex-wrap">
+                    <span className="text-[10px] font-black px-2.5 py-1 rounded-md bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                      {isAr ? '✓ متاح للحجز اليوم' : '✓ Available Today'}
                     </span>
                   </div>
-                  <h3 className="text-lg sm:text-xl font-bold text-white leading-tight">
+                  <h3 className="text-xl sm:text-2xl font-black text-white leading-tight group-hover:text-teal-300 transition-colors">
                     {isAr ? doctorProfile.name : doctorProfile.nameEn}
                   </h3>
-                  <p className="text-xs font-semibold text-teal-400 leading-snug">
+                  <p className="text-xs sm:text-sm font-extrabold text-teal-400 leading-snug">
                     {isAr ? doctorProfile.title : doctorProfile.titleEn}
                   </p>
-                  <p className="text-xs text-slate-400">
-                    {isAr ? doctorProfile.hospital : doctorProfile.hospitalEn}
-                    {doctorProfile.city ? ` - ${doctorProfile.city}` : ''}
-                  </p>
+                  <div className="flex items-center justify-center sm:justify-start gap-1 text-xs text-slate-400">
+                    <svg className="w-3.5 h-3.5 text-teal-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span className="truncate">
+                      {isAr ? doctorProfile.hospital : doctorProfile.hospitalEn}
+                      {doctorProfile.city ? ` - ${doctorProfile.city}` : ''}
+                    </span>
+                  </div>
                 </div>
               </div>
 
               {/* Specialization */}
-              <div className="mt-5 pt-4 border-t border-teal-950/60">
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-                  {isAr ? 'التخصص الدقيق' : 'Clinical Specialization'}
+              <div className="mt-6 pt-5 border-t border-teal-950/60">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                  {isAr ? 'التخصص الدقيق والخبرة السريرية' : 'Clinical Focus & Expertise'}
                 </p>
-                <p className="text-sm text-slate-300 leading-relaxed">
+                <p className="text-sm text-slate-300 leading-relaxed font-medium">
                   {isAr ? doctorProfile.specialization : doctorProfile.specializationEn}
                 </p>
               </div>
 
               {/* Consultation Fee + Payment note */}
-              <div className="mt-5 p-4 rounded-2xl bg-gradient-to-r from-teal-950/40 to-teal-950/20 border border-teal-900/50 flex items-center justify-between">
+              <div className="mt-6 p-4 rounded-2xl bg-gradient-to-r from-teal-950/50 to-teal-950/20 border border-teal-900/40 flex items-center justify-between shadow-inner">
                 <div>
-                  <p className="text-[10px] text-slate-500 mb-0.5">{isAr ? 'رسوم الاستشارة' : 'Consultation Fee'}</p>
-                  <p className="text-[11px] text-slate-400">{isAr ? 'الدفع في العيادة' : 'Pay at clinic'}</p>
+                  <p className="text-[10px] text-slate-400 font-bold mb-0.5">{isAr ? 'رسوم الاستشارة (الكشف)' : 'Consultation Fee'}</p>
+                  <p className="text-[11px] text-slate-500 font-semibold">{isAr ? 'الدفع نقداً أو بالفيزا في العيادة' : 'Pay at clinic'}</p>
                 </div>
                 <div className="text-right">
-                  <span className="text-2xl font-black text-teal-300">{doctorProfile.consultationFee || 400}</span>
-                  <span className="text-sm font-bold text-teal-400 mr-1"> {isAr ? 'ج.م' : 'EGP'}</span>
+                  <span className="text-3xl font-black text-teal-300">{doctorProfile.consultationFee || 400}</span>
+                  <span className="text-xs font-bold text-teal-400 mr-1"> {isAr ? 'ج.م' : 'EGP'}</span>
                 </div>
               </div>
 
               {/* Trust Badges */}
-              <div className="mt-4 flex flex-wrap gap-2">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-300 text-xs border border-emerald-500/20 font-semibold">
+              <div className="mt-5 flex flex-wrap gap-2 justify-center sm:justify-start">
+                <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-300 text-xs border border-emerald-500/25 font-bold shadow-sm">
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   {isAr ? 'طبيب معتمد رسمياً' : 'Verified Doctor'}
                 </span>
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-teal-500/10 text-teal-300 text-xs border border-teal-500/20 font-semibold">
+                <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-teal-500/10 text-teal-300 text-xs border border-teal-500/25 font-bold shadow-sm animate-pulse">
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  {isAr ? 'رد فوري على الحجوزات' : 'Instant Confirmation'}
+                  {isAr ? 'تأكيد وحجز فوري' : 'Instant Confirmation'}
                 </span>
               </div>
 

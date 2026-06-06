@@ -14,6 +14,7 @@ export interface SupabaseDoctor {
   consultation_fee: number;
   city: string;
   created_at: string;
+  profile_image_url?: string;
 }
 
 // Define TS-safe interface for Appointments from Supabase

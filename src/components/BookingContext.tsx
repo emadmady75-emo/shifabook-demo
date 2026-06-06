@@ -85,6 +85,7 @@ interface BookingContextType {
   setPhoneVerified: (val: boolean) => void;
   checkPhoneBookings: (phone: string) => Promise<{ activeBooking: PatientBooking | null; patientName: string }>;
   refreshAppointments: () => Promise<void>;
+  refreshProfile?: () => Promise<void>;
 }
 
 const BookingContext = createContext<BookingContextType | undefined>(undefined);
@@ -118,35 +119,35 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     localStorage.setItem('shifabook_facility', JSON.stringify(fac));
   };
 
+  const fetchProfile = async () => {
+    try {
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { data, error } = await supabase.from('doctors').select('*').limit(1);
+      if (!error && data && data.length > 0) {
+        const doc = data[0];
+        setDoctorProfile({
+          id: doc.id,
+          name: doc.full_name,
+          nameEn: doc.full_name,
+          title: doc.specialization,
+          titleEn: doc.specialization,
+          specialization: doc.specialization,
+          specializationEn: doc.specialization,
+          avatar: doc.profile_image_url || INITIAL_DOCTOR.avatar,
+          hospital: doc.clinic_name,
+          hospitalEn: doc.clinic_name,
+          consultationFee: doc.consultation_fee,
+          city: doc.city,
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching doctor profile in BookingProvider:', err);
+    }
+  };
+
   // Load from localStorage on mount
   useEffect(() => {
-    // Fetch doctor profile from Supabase on mount
-    const fetchProfile = async () => {
-      try {
-        const { createClient } = await import('@/lib/supabase/client');
-        const supabase = createClient();
-        const { data, error } = await supabase.from('doctors').select('*').limit(1);
-        if (!error && data && data.length > 0) {
-          const doc = data[0];
-          setDoctorProfile({
-            id: doc.id,
-            name: doc.full_name,
-            nameEn: doc.full_name,
-            title: doc.specialization,
-            titleEn: doc.specialization,
-            specialization: doc.specialization,
-            specializationEn: doc.specialization,
-            avatar: INITIAL_DOCTOR.avatar,
-            hospital: doc.clinic_name,
-            hospitalEn: doc.clinic_name,
-            consultationFee: doc.consultation_fee,
-            city: doc.city,
-          });
-        }
-      } catch (err) {
-        console.error('Error fetching doctor profile in BookingProvider:', err);
-      }
-    };
     fetchProfile();
 
     // Clear legacy shifabook_bookings key
@@ -438,6 +439,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
               appointment_date: date,
               appointment_time: time,
               facility_name: language === 'ar' ? selectedFacility.name : selectedFacility.nameEn,
+              facility_address: language === 'ar' ? selectedFacility.address : selectedFacility.addressEn,
               facility_map_url: selectedFacility.mapUrl
             })
           }).catch(err => {
@@ -541,6 +543,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
               old_appointment_date: bookingToMove.date,
               old_appointment_time: bookingToMove.timeSlot,
               facility_name: newFacilityName,
+              facility_address: language === 'ar' ? selectedFacility.address : selectedFacility.addressEn,
               facility_map_url: newFacilityMapUrl
             })
           }).catch(err => {
@@ -598,6 +601,30 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           throw new Error(error.message || 'Failed to cancel appointment in Supabase');
         }
         console.log('Successfully cancelled appointment in Supabase:', data);
+
+        // Trigger WhatsApp cancellation event
+        if (data) {
+          try {
+            fetch('/api/public/whatsapp', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                doctor_id: data.doctor_id,
+                patient_name: data.patient_name,
+                patient_phone: data.patient_phone,
+                appointment_date: data.appointment_date,
+                appointment_time: data.appointment_time,
+                is_cancelled: true
+              })
+            }).catch(err => {
+              console.error('Non-blocking WhatsApp API cancellation trigger error:', err);
+            });
+          } catch (webhookErr) {
+            console.error('Error invoking WhatsApp API cancellation trigger:', webhookErr);
+          }
+        }
       } catch (err) {
         console.error('Failed to cancel appointment in Supabase:', err);
         throw err;
@@ -736,8 +763,8 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           patientName: b.patientName,
           phone: b.mobileNumber,
           message: language === 'ar'
-            ? `تم تأكيد حجزك رسمياً يا ${b.patientName} مع د. عبدالله المصري يوم ${b.date} الساعة ${formattedSlotTime}. نتطلع لرؤيتك بالسلامة في العيادة! 🩺✨`
-            : `Confirmed: Your appointment with Dr. Abdullah El-Masry on ${b.date} at ${formattedSlotTime} is now confirmed. We look forward to seeing you.`,
+            ? `مرحباً ${b.patientName} 👋\n\nتم نقل موعدك بنجاح مع د. عبدالله المصري.\n\n📅 الموعد الجديد: ${b.date}\n⏰ الوقت الجديد: ${formattedSlotTime}\n\n📍 العنوان: ${b.facilityAddress || ''}\n🗺️ اللوكيشن: ${b.facilityMapUrl || ''}\n\nفي انتظارك وبنتمنى لك دوام الصحة 🌷`
+            : `Hello ${b.patientName} 👋\n\nYour appointment with Dr. Abdullah El-Masry has been rescheduled successfully.\n\n📅 New Date: ${b.date}\n⏰ New Time: ${formattedSlotTime}\n\n📍 Address: ${b.facilityAddress || ''}\n🗺️ Map: ${b.facilityMapUrl || ''}\n\nLooking forward to seeing you. Wish you good health 🌷`,
           status: 'read'
         });
       }
@@ -755,8 +782,8 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           patientName: b.patientName,
           phone: b.mobileNumber,
           message: language === 'ar'
-            ? `تم إلغاء موعدك المجدول مع د. عبدالله المصري يوم ${b.date} الساعة ${formattedSlotTime}. نتمنى لك عاجل الشفاء والصحة والعافية! 🌸`
-            : `Notice: Your scheduled appointment with Dr. Abdullah El-Masry on ${b.date} at ${formattedSlotTime} has been cancelled. Wish you a speedy recovery.`,
+            ? `مرحباً ${b.patientName} 👋\n\nتم إلغاء موعدك مع د. عبدالله المصري بنجاح.\n\n📅 الموعد الملغي: ${b.date}\n⏰ الوقت: ${formattedSlotTime}\n\nتقدر تحجز موعد جديد في أي وقت من هنا:\nhttps://shifabook-demo.vercel.app/book/dr-ahmed\n\nنتمنى لك دوام الصحة 🌷`
+            : `Hello ${b.patientName} 👋\n\nYour appointment with Dr. Abdullah El-Masry has been cancelled successfully.\n\n📅 Cancelled Date: ${b.date}\n⏰ Time: ${formattedSlotTime}\n\nYou can book a new slot anytime here:\nhttps://shifabook-demo.vercel.app/book/dr-ahmed\n\nWish you good health 🌷`,
           status: 'sent'
         });
       }
@@ -985,6 +1012,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setPhoneVerified,
         checkPhoneBookings,
         refreshAppointments,
+        refreshProfile: fetchProfile,
       }}
     >
       {children}
