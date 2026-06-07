@@ -528,33 +528,46 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         // Trigger WhatsApp webhook bridge for rescheduling
         try {
-          fetch('/api/public/whatsapp', {
+          const payload = {
+            event_type: 'booking.rescheduled',
+            data: {
+              patient_name: bookingToMove.patientName,
+              patient_phone: bookingToMove.mobileNumber,
+              doctor_name: language === 'ar' ? doctorProfile.name : doctorProfile.nameEn,
+              specialization: language === 'ar' ? doctorProfile.specialization : doctorProfile.specializationEn,
+              old_appointment_date: bookingToMove.date,
+              old_appointment_time: bookingToMove.timeSlot,
+              new_appointment_date: newDate,
+              new_appointment_time: newTime,
+              facility_name: language === 'ar' ? selectedFacility.name : selectedFacility.nameEn,
+              facility_address: language === 'ar' ? selectedFacility.address : selectedFacility.addressEn,
+              facility_map_url: selectedFacility.mapUrl,
+              booking_id: bookingId
+            }
+          };
+
+          // Client-side Log: [CLIENT_WHATSAPP_EVENT]
+          console.log('[CLIENT_WHATSAPP_EVENT]', payload);
+
+          const response = await fetch('/api/public/whatsapp', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-              event_type: 'booking.rescheduled',
-              data: {
-                patient_name: bookingToMove.patientName,
-                patient_phone: bookingToMove.mobileNumber,
-                doctor_name: language === 'ar' ? doctorProfile.name : doctorProfile.nameEn,
-                specialization: language === 'ar' ? doctorProfile.specialization : doctorProfile.specializationEn,
-                old_appointment_date: bookingToMove.date,
-                old_appointment_time: bookingToMove.timeSlot,
-                new_appointment_date: newDate,
-                new_appointment_time: newTime,
-                facility_name: language === 'ar' ? selectedFacility.name : selectedFacility.nameEn,
-                facility_address: language === 'ar' ? selectedFacility.address : selectedFacility.addressEn,
-                facility_map_url: selectedFacility.mapUrl,
-                booking_id: bookingId
-              }
-            })
-          }).catch(err => {
-            console.error('Non-blocking WhatsApp API reschedule trigger error:', err);
+            body: JSON.stringify(payload)
           });
-        } catch (webhookErr) {
-          console.error('Error invoking WhatsApp API reschedule trigger client-side:', webhookErr);
+
+          const responseText = await response.text();
+
+          // Client-side Log: [CLIENT_WHATSAPP_RESULT]
+          console.log('[CLIENT_WHATSAPP_RESULT]', {
+            event_type: payload.event_type,
+            ok: response.ok,
+            status: response.status,
+            body: responseText
+          });
+        } catch (err) {
+          console.error('Non-blocking WhatsApp API reschedule trigger error:', err);
         }
 
       } catch (err) {
@@ -612,29 +625,42 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const facility = DEMO_FACILITIES.find(f => f.id === data.facility_id) || DEMO_FACILITIES[0];
             const cancelledBy = typeof window !== 'undefined' && window.location.pathname.startsWith('/doctor') ? 'doctor' : 'patient';
 
-            fetch('/api/public/whatsapp', {
+            const payload = {
+              event_type: 'booking.cancelled',
+              data: {
+                patient_name: data.patient_name,
+                patient_phone: data.patient_phone,
+                doctor_name: language === 'ar' ? doctorProfile.name : doctorProfile.nameEn,
+                specialization: language === 'ar' ? doctorProfile.specialization : doctorProfile.specializationEn,
+                appointment_date: data.appointment_date,
+                appointment_time: data.appointment_time,
+                facility_name: language === 'ar' ? facility.name : facility.nameEn,
+                facility_address: language === 'ar' ? facility.address : facility.addressEn,
+                facility_map_url: facility.mapUrl,
+                booking_id: data.id,
+                cancelled_by: cancelledBy
+              }
+            };
+
+            // Client-side Log: [CLIENT_WHATSAPP_EVENT]
+            console.log('[CLIENT_WHATSAPP_EVENT]', payload);
+
+            const response = await fetch('/api/public/whatsapp', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json'
               },
-              body: JSON.stringify({
-                event_type: 'booking.cancelled',
-                data: {
-                  patient_name: data.patient_name,
-                  patient_phone: data.patient_phone,
-                  doctor_name: language === 'ar' ? doctorProfile.name : doctorProfile.nameEn,
-                  specialization: language === 'ar' ? doctorProfile.specialization : doctorProfile.specializationEn,
-                  appointment_date: data.appointment_date,
-                  appointment_time: data.appointment_time,
-                  facility_name: language === 'ar' ? facility.name : facility.nameEn,
-                  facility_address: language === 'ar' ? facility.address : facility.addressEn,
-                  facility_map_url: facility.mapUrl,
-                  booking_id: data.id,
-                  cancelled_by: cancelledBy
-                }
-              })
-            }).catch(err => {
-              console.error('Non-blocking WhatsApp API cancellation trigger error:', err);
+              body: JSON.stringify(payload)
+            });
+
+            const responseText = await response.text();
+
+            // Client-side Log: [CLIENT_WHATSAPP_RESULT]
+            console.log('[CLIENT_WHATSAPP_RESULT]', {
+              event_type: payload.event_type,
+              ok: response.ok,
+              status: response.status,
+              body: responseText
             });
           } catch (webhookErr) {
             console.error('Error invoking WhatsApp API cancellation trigger:', webhookErr);

@@ -15,28 +15,56 @@ export async function POST(request: NextRequest) {
       data.patient_phone = normalizePhone(data.patient_phone);
     }
 
+    const normalizedPhone = data.patient_phone || '';
+
+    // Required Debug Log: [WHATSAPP_BRIDGE_IN]
+    console.log('[WHATSAPP_BRIDGE_IN]', {
+      event_type,
+      phone: normalizedPhone,
+      hasData: !!data,
+    });
+
     const n8nWebhookUrl = process.env.N8N_WHATSAPP_WEBHOOK_URL;
     if (!n8nWebhookUrl) {
       console.warn('N8N_WHATSAPP_WEBHOOK_URL is not set. Skipping webhook execution.');
       return NextResponse.json({ ok: true, warning: 'Webhook URL not configured' }, { status: 200 });
     }
 
-    // Forward to n8n unchanged
+    // Forward to n8n: Support both nested and flat fields for compatibility
+    const outboundPayload = {
+      event_type,
+      data,
+      ...data // Merges properties (patient_name, patient_phone, etc.) to the root level
+    };
+
+    let responseBody = '';
+    let responseStatus = 500;
+    let responseOk = false;
+
     try {
       const response = await fetch(n8nWebhookUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          event_type,
-          data
-        })
+        body: JSON.stringify(outboundPayload)
+      });
+
+      responseStatus = response.status;
+      responseOk = response.ok;
+      responseBody = await response.text();
+
+      // Required Debug Log: [WHATSAPP_BRIDGE_N8N_RESPONSE]
+      console.log('[WHATSAPP_BRIDGE_N8N_RESPONSE]', {
+        event_type,
+        status: responseStatus,
+        ok: responseOk,
+        body: responseBody,
       });
 
       if (!response.ok) {
-        console.error(`n8n webhook returned error status: ${response.status} ${response.statusText}`);
-        return NextResponse.json({ success: false, error: `n8n webhook returned status ${response.status}` }, { status: 500 });
+        console.error(`n8n webhook returned error status: ${responseStatus} ${responseBody}`);
+        return NextResponse.json({ success: false, error: `n8n webhook returned status ${responseStatus}` }, { status: 500 });
       }
     } catch (webhookErr: any) {
       console.error('Failed to send webhook to n8n:', webhookErr);
