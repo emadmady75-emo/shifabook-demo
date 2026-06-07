@@ -1,12 +1,14 @@
 'use client';
 
 import React from 'react';
-import { useBooking, TimeSlot } from '../BookingContext';
+import { useBooking, TimeSlot, PatientBooking } from '../BookingContext';
 
 interface BookingGridProps {
   selectedDate: string;
   selectedTime: string | null;
   onSelectTime: (time: string) => void;
+  isRescheduling?: boolean;
+  activeBooking?: PatientBooking | null;
 }
 
 // Period icons inline SVG paths
@@ -28,7 +30,7 @@ const MoonIcon = () => (
   </svg>
 );
 
-export default function BookingGrid({ selectedDate, selectedTime, onSelectTime }: BookingGridProps) {
+export default function BookingGrid({ selectedDate, selectedTime, onSelectTime, isRescheduling = false, activeBooking }: BookingGridProps) {
   const { language, generateTimeSlotsForDate, isHydrated, isLoadingAvailability } = useBooking();
   const isAr = language === 'ar';
 
@@ -105,8 +107,13 @@ export default function BookingGrid({ selectedDate, selectedTime, onSelectTime }
             const isExpired = slot.isExpired;
             const seatId = `${rowCode}${index + 1}`;
 
+            // Highlight the current active booking slot under rescheduling mode
+            const isCurrentSlot = !!(isRescheduling && activeBooking && selectedDate === activeBooking.date && slot.time === activeBooking.timeSlot);
+
             let cardCls = '';
-            if (isExpired) {
+            if (isCurrentSlot) {
+              cardCls = 'bg-amber-500/10 border-2 border-amber-500/80 text-amber-300 cursor-not-allowed shadow-md shadow-amber-500/10 scale-[1.03]';
+            } else if (isExpired) {
               cardCls = 'bg-slate-950/20 border-slate-900/30 text-slate-700 cursor-not-allowed opacity-35';
             } else if (isFull) {
               cardCls = 'bg-rose-950/15 border-rose-900/50 text-rose-500/70 cursor-not-allowed';
@@ -119,40 +126,44 @@ export default function BookingGrid({ selectedDate, selectedTime, onSelectTime }
             return (
               <button
                 key={slot.time}
-                onClick={() => !isExpired && !isFull && onSelectTime(slot.time)}
-                disabled={isExpired || isFull}
+                onClick={() => !isExpired && !isFull && !isCurrentSlot && onSelectTime(slot.time)}
+                disabled={isExpired || isFull || isCurrentSlot}
                 aria-label={`${isAr ? 'مقعد' : 'Seat'} ${seatId} — ${formatTime(slot.time)}`}
                 aria-pressed={isSelected}
                 className={`relative py-3 px-1.5 rounded-xl border flex flex-col items-center gap-1.5 transition-all duration-200 seat-slot ${cardCls}`}
               >
                 {/* Seat code */}
-                <span className={`text-[9px] font-black tracking-widest ${isSelected ? 'text-teal-950/70' : 'text-teal-500/60'}`}>
+                <span className={`text-[9px] font-black tracking-widest ${isCurrentSlot ? 'text-amber-500/60' : isSelected ? 'text-teal-950/70' : 'text-teal-500/60'}`}>
                   {seatId}
                 </span>
 
                 {/* Seat icon */}
                 <svg
-                  className={`w-6 h-6 ${isSelected ? 'text-[#04080b]' : isFull ? 'text-rose-600/50' : 'text-teal-400/60'}`}
+                  className={`w-6 h-6 ${isCurrentSlot ? 'text-amber-400' : isSelected ? 'text-[#04080b]' : isFull ? 'text-rose-600/50' : 'text-teal-400/60'}`}
                   fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
                 </svg>
 
                 {/* Time label — always visible, clear */}
-                <span className={`text-[11px] font-black leading-none tracking-tight text-center ${isSelected ? 'text-[#04080b]' : isExpired ? 'text-slate-600 line-through' : 'text-slate-100'}`}>
+                <span className={`text-[11px] font-black leading-none tracking-tight text-center ${isCurrentSlot ? 'text-amber-300' : isSelected ? 'text-[#04080b]' : isExpired ? 'text-slate-600 line-through' : 'text-slate-100'}`}>
                   {formatTime(slot.time)}
                 </span>
 
                 {/* Status badge */}
                 {!isExpired && (
                   <span className={`text-[8px] px-1.5 py-0.5 rounded-md font-bold ${
-                    isSelected
+                    isCurrentSlot
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/35'
+                      : isSelected
                       ? 'bg-teal-950/25 text-teal-950'
                       : isFull
                       ? 'bg-rose-500/15 text-rose-400'
                       : 'bg-teal-500/15 text-teal-300'
                   }`}>
-                    {isFull
+                    {isCurrentSlot
+                      ? (isAr ? 'موعدك الحالي' : 'Current')
+                      : isFull
                       ? (isAr ? 'محجوز' : 'Full')
                       : isSelected
                       ? (isAr ? '✓ محدد' : '✓ Selected')

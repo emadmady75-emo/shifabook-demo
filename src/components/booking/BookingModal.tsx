@@ -76,7 +76,7 @@ export default function BookingModal({
     }
 
     try {
-      const moved = await rescheduleAppointment(rescheduleBookingId, selectedDate, selectedTime);
+      const moved = await rescheduleAppointment(rescheduleBookingId, selectedDate, selectedTime, 'patient');
       if (moved) {
         const updatedBooking = activeBooking || bookings.find(b => b.id === rescheduleBookingId);
         if (updatedBooking) {
@@ -225,7 +225,7 @@ export default function BookingModal({
     // Step 3: Complete Booking
     try {
       if (isRescheduling && rescheduleBookingId) {
-        const moved = await rescheduleAppointment(rescheduleBookingId, selectedDate, selectedTime);
+        const moved = await rescheduleAppointment(rescheduleBookingId, selectedDate, selectedTime, 'patient');
         if (moved) {
           const updatedBooking = bookings.find(b => b.id === rescheduleBookingId);
           if (updatedBooking) {

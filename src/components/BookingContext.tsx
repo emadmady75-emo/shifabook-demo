@@ -63,7 +63,7 @@ interface BookingContextType {
   setSelectedFacility: (facility: Facility) => void;
   updateScheduleConfig: (config: Partial<ScheduleConfig>) => void;
   bookAppointment: (name: string, phone: string, date: string, time: string) => Promise<PatientBooking>;
-  rescheduleAppointment: (bookingId: string, newDate: string, newTime: string) => Promise<boolean>;
+  rescheduleAppointment: (bookingId: string, newDate: string, newTime: string, rescheduledBy?: 'patient' | 'doctor') => Promise<boolean>;
   cancelAppointment: (bookingId: string) => Promise<void>;
   confirmAttendance: (bookingId: string) => Promise<void>;
   triggerMockWhatsAppEvent: (type: WhatsAppEvent['type'], booking: PatientBooking) => void;
@@ -497,7 +497,12 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return newBooking;
   };
 
-  const rescheduleAppointment = async (bookingId: string, newDate: string, newTime: string) => {
+  const rescheduleAppointment = async (
+    bookingId: string,
+    newDate: string,
+    newTime: string,
+    rescheduledBy: 'patient' | 'doctor' = 'patient'
+  ) => {
     const bookingToMove = activeBooking && activeBooking.id === bookingId ? activeBooking : bookings.find(b => b.id === bookingId);
     if (!bookingToMove) return false;
 
@@ -507,6 +512,9 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (targetSlot && targetSlot.isBooked) {
       return false; // Slot full
     }
+
+    // Keep status consistent (pending or confirmed)
+    const newStatus = bookingToMove.status || 'confirmed';
 
     // If it's a Supabase UUID (length is 36)
     if (bookingId.length === 36) {
@@ -518,7 +526,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           .update({
             appointment_date: newDate,
             appointment_time: newTime,
-            status: 'confirmed'
+            status: newStatus
           })
           .eq('id', bookingId);
 
@@ -542,7 +550,8 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
               facility_name: language === 'ar' ? selectedFacility.name : selectedFacility.nameEn,
               facility_address: language === 'ar' ? selectedFacility.address : selectedFacility.addressEn,
               facility_map_url: selectedFacility.mapUrl,
-              booking_id: bookingId
+              booking_id: bookingId,
+              rescheduled_by: rescheduledBy
             }
           };
 
@@ -583,13 +592,17 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       ...bookingToMove,
       date: newDate,
       timeSlot: newTime,
-      status: 'confirmed' as const,
+      status: newStatus,
       facilityName: newFacilityName,
       facilityMapUrl: newFacilityMapUrl,
       facilityAddress: language === 'ar' ? selectedFacility.address : selectedFacility.addressEn
     };
-    localStorage.setItem('shifabook_active_booking_details', JSON.stringify(updatedBooking));
-    setActiveBooking(updatedBooking);
+    
+    // Only update activeBooking localStorage if this was the active booking
+    if (activeBooking && activeBooking.id === bookingId) {
+      localStorage.setItem('shifabook_active_booking_details', JSON.stringify(updatedBooking));
+      setActiveBooking(updatedBooking);
+    }
 
     // Refresh public availability or doctor appointments to reflect immediately
     await refreshAppointments();

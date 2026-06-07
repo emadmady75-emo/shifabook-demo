@@ -12,7 +12,7 @@ import { useBooking, PatientBooking, DEMO_FACILITIES } from '@/components/Bookin
 import { formatDateOnly } from '@/lib/dates';
 
 export default function PatientLandingPage() {
-  const { language, activeBookingId, doctorProfile, fetchPublicAvailability, selectedFacility, setSelectedFacility, phoneVerified } = useBooking();
+  const { language, activeBookingId, activeBooking, doctorProfile, fetchPublicAvailability, selectedFacility, setSelectedFacility, phoneVerified } = useBooking();
   const isAr = language === 'ar';
 
   React.useEffect(() => {
@@ -52,6 +52,10 @@ export default function PatientLandingPage() {
   const handleClearActiveBooking = () => {
     setIsRescheduling(false);
     setLastCompletedBooking(null);
+  };
+
+  const handleCancelReschedule = () => {
+    setIsRescheduling(false);
   };
 
   const formatPeriodTime = (timeStr: string) => {
@@ -117,7 +121,29 @@ export default function PatientLandingPage() {
           <RescheduleAlert 
             onTriggerReschedule={handleTriggerReschedule} 
             onClear={handleClearActiveBooking}
+            isRescheduling={isRescheduling}
+            onCancelReschedule={handleCancelReschedule}
           />
+
+          {isRescheduling && (
+            <div className="p-4 sm:p-5 rounded-3xl bg-teal-500/10 border border-teal-500/35 flex flex-col sm:flex-row items-center justify-between gap-3 text-right text-teal-300 text-xs font-bold animate-pulse shadow-md shadow-teal-500/5">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-teal-400" />
+                <span>
+                  {isAr 
+                    ? 'أنت الآن في وضع نقل الموعد — اختر موعداً جديداً من الخريطة' 
+                    : 'You are in rescheduling mode — please select a new slot from the seat map'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleCancelReschedule}
+                className="px-3 py-1.5 rounded-xl bg-teal-500/20 hover:bg-teal-500/30 text-teal-200 border border-teal-500/30 transition-colors text-[10px]"
+              >
+                {isAr ? 'إلغاء وضع النقل' : 'Cancel Rescheduling'}
+              </button>
+            </div>
+          )}
 
           {/* Core Booking Selector Grid Container */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
@@ -187,6 +213,8 @@ export default function PatientLandingPage() {
                   selectedDate={selectedDate} 
                   selectedTime={selectedTime} 
                   onSelectTime={handleSelectTime} 
+                  isRescheduling={isRescheduling}
+                  activeBooking={activeBooking}
                 />
               </div>
 

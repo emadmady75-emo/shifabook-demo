@@ -5,8 +5,119 @@ import { useBooking, PatientBooking, WhatsAppEvent } from '../BookingContext';
 import { formatDateOnly } from '@/lib/dates';
 
 export default function AppointmentsList() {
-  const { language, bookings, cancelAppointment, confirmAttendance, whatsappEvents } = useBooking();
+  const { 
+    language, 
+    bookings, 
+    cancelAppointment, 
+    confirmAttendance, 
+    whatsappEvents, 
+    rescheduleAppointment, 
+    generateTimeSlotsForDate, 
+    scheduleConfig 
+  } = useBooking();
   const isAr = language === 'ar';
+
+  const [reschedulingBooking, setReschedulingBooking] = React.useState<PatientBooking | null>(null);
+  const [selectedRescheduleDate, setSelectedRescheduleDate] = React.useState<string>('');
+  const [selectedRescheduleTime, setSelectedRescheduleTime] = React.useState<string | null>(null);
+  const [rescheduleLoading, setRescheduleLoading] = React.useState(false);
+  const [rescheduleError, setRescheduleError] = React.useState('');
+
+  const handleOpenReschedule = (appt: PatientBooking) => {
+    setReschedulingBooking(appt);
+    setSelectedRescheduleDate(appt.date);
+    setSelectedRescheduleTime(null);
+    setRescheduleError('');
+  };
+
+  const handleRescheduleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reschedulingBooking || !selectedRescheduleTime) return;
+
+    setRescheduleLoading(true);
+    setRescheduleError('');
+
+    try {
+      const success = await rescheduleAppointment(
+        reschedulingBooking.id,
+        selectedRescheduleDate,
+        selectedRescheduleTime,
+        'doctor'
+      );
+
+      if (success) {
+        setReschedulingBooking(null);
+      } else {
+        setRescheduleError(isAr ? 'عذراً، هذا الموعد غير متاح أو ممتلئ.' : 'Sorry, this slot is not available or full.');
+      }
+    } catch (err: any) {
+      setRescheduleError(err?.message || (isAr ? 'حدث خطأ أثناء نقل الموعد' : 'Failed to reschedule appointment'));
+    } finally {
+      setRescheduleLoading(false);
+    }
+  };
+
+  const rescheduleDays = Array.from({ length: 10 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    return d;
+  });
+
+  const getDayName = (date: Date) =>
+    date.toLocaleDateString(isAr ? 'ar-EG' : 'en-US', { weekday: 'short' });
+
+  const getMonthName = (date: Date) =>
+    date.toLocaleDateString(isAr ? 'ar-EG' : 'en-US', { month: 'short' });
+
+  const renderRescheduleSlots = () => {
+    if (!reschedulingBooking) return null;
+    const slots = generateTimeSlotsForDate(selectedRescheduleDate);
+    if (slots.length === 0) {
+      return (
+        <div className="col-span-full text-center py-8 text-slate-500 text-xs">
+          {isAr ? 'العيادة مغلقة هذا اليوم' : 'Clinic Closed'}
+        </div>
+      );
+    }
+    return slots.map((slot) => {
+      const isSelected = selectedRescheduleTime === slot.time;
+      const isCurrentSlot = selectedRescheduleDate === reschedulingBooking.date && slot.time === reschedulingBooking.timeSlot;
+      const isFull = slot.isBooked;
+      const isExpired = slot.isExpired;
+
+      let btnCls = '';
+      if (isCurrentSlot) {
+        btnCls = 'bg-amber-500/10 border-amber-500/70 text-amber-300 cursor-not-allowed';
+      } else if (isExpired) {
+        btnCls = 'bg-slate-950/20 border-slate-900/20 text-slate-700 cursor-not-allowed opacity-35';
+      } else if (isFull) {
+        btnCls = 'bg-rose-950/15 border-rose-900/50 text-rose-500/70 cursor-not-allowed';
+      } else if (isSelected) {
+        btnCls = 'bg-gradient-to-r from-teal-500 to-emerald-400 border-teal-300 text-[#070e12] font-black scale-[1.02] shadow-md shadow-teal-500/15';
+      } else {
+        btnCls = 'bg-[#09151e] border-teal-950/60 text-slate-200 hover:border-teal-500 hover:bg-teal-950/20';
+      }
+
+      return (
+        <button
+          key={slot.time}
+          type="button"
+          disabled={isExpired || isFull || isCurrentSlot}
+          onClick={() => setSelectedRescheduleTime(slot.time)}
+          className={`py-2.5 px-1.5 rounded-xl border flex flex-col items-center justify-center transition-all ${btnCls}`}
+        >
+          <span className="font-bold text-xs">{formatPeriodTime(slot.time)}</span>
+          <span className="text-[8px] opacity-80 mt-0.5">
+            {isCurrentSlot 
+              ? (isAr ? 'الحالي' : 'Current') 
+              : isFull 
+              ? (isAr ? 'محجوز' : 'Full') 
+              : (isAr ? 'شاغر' : 'Free')}
+          </span>
+        </button>
+      );
+    });
+  };
 
   const activeBookings = bookings.filter(b => b.status !== 'cancelled').sort((a, b) => {
     return a.date.localeCompare(b.date) || a.timeSlot.localeCompare(b.timeSlot);
@@ -92,7 +203,8 @@ export default function AppointmentsList() {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 text-right">
+    <>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 text-right">
       
       {/* Dynamic Patient Bookings Tracker Table */}
       <div className="lg:col-span-8 glass-panel rounded-3xl p-6 border border-teal-500/20 space-y-6">
@@ -145,6 +257,14 @@ export default function AppointmentsList() {
                             className="px-3 py-1.5 rounded-lg bg-emerald-500 text-emerald-950 hover:bg-emerald-400 font-bold text-xs transition-colors"
                           >
                             {isAr ? 'تأكيد الحضور' : 'Confirm'}
+                          </button>
+                        )}
+                        {!isAppointmentPast(appt.date, appt.timeSlot) && (
+                          <button
+                            onClick={() => handleOpenReschedule(appt)}
+                            className="px-3 py-1.5 rounded-lg bg-teal-500/10 text-teal-400 border border-teal-950 hover:bg-[#0d2a2f] hover:text-teal-350 text-xs transition-colors font-semibold"
+                          >
+                            {isAr ? 'نقل الموعد' : 'Reschedule'}
                           </button>
                         )}
                         <button
@@ -245,7 +365,123 @@ export default function AppointmentsList() {
         </div>
 
       </div>
-
     </div>
+
+    {/* Reschedule Modal Overlay */}
+      {reschedulingBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 text-right" dir="rtl">
+          {/* Dark glass backdrop */}
+          <div onClick={() => setReschedulingBooking(null)} className="absolute inset-0 bg-[#04080b]/95 backdrop-blur-md" />
+          
+          {/* Modal Container */}
+          <div className="relative w-full max-w-lg glass-panel rounded-3xl overflow-hidden shadow-2xl z-10 border border-teal-500/20 text-right animate-in fade-in zoom-in-95 duration-200">
+            
+            {/* Header */}
+            <div className="p-5 border-b border-teal-950/60 flex items-center justify-between">
+              <button 
+                type="button"
+                onClick={() => setReschedulingBooking(null)} 
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-900 transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              
+              <h3 className="text-lg font-black text-white font-bold">
+                {isAr ? 'نقل موعد المريض' : 'Reschedule Patient Appointment'}
+              </h3>
+            </div>
+
+            {/* Content Form */}
+            <form onSubmit={handleRescheduleSubmit} className="p-6 space-y-5">
+              {rescheduleError && (
+                <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs font-bold text-rose-400 text-center">
+                  ⚠️ {rescheduleError}
+                </div>
+              )}
+
+              {/* Patient Summary Card */}
+              <div className="p-4 rounded-2xl bg-[#09151e] border border-teal-950/60 space-y-2 text-xs sm:text-sm text-slate-300">
+                <div className="flex justify-between items-center pb-2 border-b border-teal-950/20">
+                  <span className="text-slate-500">{isAr ? 'اسم المريض:' : 'Patient Name:'}</span>
+                  <span className="font-bold text-white">{reschedulingBooking.patientName}</span>
+                </div>
+                <div className="flex justify-between items-center pb-2 border-b border-teal-950/20">
+                  <span className="text-slate-500">{isAr ? 'رقم الهاتف:' : 'Phone Number:'}</span>
+                  <span className="font-mono text-white">{reschedulingBooking.mobileNumber}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500">{isAr ? 'الموعد الحالي:' : 'Current Appointment:'}</span>
+                  <span className="font-bold text-amber-400 font-mono">
+                    {reschedulingBooking.date} | {formatPeriodTime(reschedulingBooking.timeSlot)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Step 1: Select New Date */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-300 block text-right">
+                  {isAr ? 'اختر اليوم الجديد:' : 'Select New Date:'}
+                </label>
+                <select
+                  value={selectedRescheduleDate}
+                  onChange={(e) => {
+                    setSelectedRescheduleDate(e.target.value);
+                    setSelectedRescheduleTime(null);
+                  }}
+                  className="w-full bg-[#09151e] border border-teal-950 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-teal-500 transition-colors cursor-pointer text-right font-bold"
+                >
+                  {rescheduleDays.map((date) => {
+                    const dateStr = formatDateOnly(date);
+                    const dayOfWeek = date.getDay();
+                    const isWorkingDay = scheduleConfig?.workingDays?.includes(dayOfWeek) ?? true;
+                    
+                    return (
+                      <option key={dateStr} value={dateStr} disabled={!isWorkingDay} className="bg-slate-950 text-white">
+                        {dateStr} - {getDayName(date)} ({isWorkingDay ? (isAr ? 'متاح' : 'Available') : (isAr ? 'مغلق' : 'Closed')})
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              {/* Step 2: Select New Time Slot Grid */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-300 block text-right">
+                  {isAr ? 'اختر المقعد / الموعد الجديد:' : 'Select New Seat / Time Slot:'}
+                </label>
+                
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[180px] overflow-y-auto p-1 custom-scrollbar border border-teal-950 bg-[#060d13]/55 rounded-2xl" dir="ltr">
+                  {renderRescheduleSlots()}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-3 flex gap-3" dir="rtl">
+                <button
+                  type="button"
+                  onClick={() => setReschedulingBooking(null)}
+                  className="flex-1 py-3.5 rounded-xl border border-teal-950/80 bg-transparent text-slate-300 font-bold text-sm hover:bg-slate-900 hover:text-white transition-colors"
+                >
+                  {isAr ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  disabled={rescheduleLoading || !selectedRescheduleTime}
+                  className="flex-[2] py-3.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-400 text-[#070e12] font-black text-sm hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-1.5 shadow-md shadow-teal-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {rescheduleLoading ? (
+                    <div className="w-5 h-5 border-2 border-[#070e12] border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <span>{isAr ? 'تأكيد نقل الموعد' : 'Confirm Reschedule'}</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

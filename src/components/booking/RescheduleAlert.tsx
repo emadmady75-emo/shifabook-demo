@@ -6,9 +6,11 @@ import { useBooking } from '../BookingContext';
 interface RescheduleAlertProps {
   onTriggerReschedule: () => void;
   onClear: () => void;
+  isRescheduling?: boolean;
+  onCancelReschedule?: () => void;
 }
 
-export default function RescheduleAlert({ onTriggerReschedule, onClear }: RescheduleAlertProps) {
+export default function RescheduleAlert({ onTriggerReschedule, onClear, isRescheduling = false, onCancelReschedule }: RescheduleAlertProps) {
   const { language, activeBooking, cancelAppointment } = useBooking();
   const isAr = language === 'ar';
 
@@ -72,19 +74,39 @@ export default function RescheduleAlert({ onTriggerReschedule, onClear }: Resche
       </div>
 
       {/* Buttons */}
-      <div className="flex items-center gap-2 w-full md:w-auto">
+      <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
         <button
           onClick={handleCancelClick}
           className="flex-1 md:flex-none px-4 py-2 text-xs font-semibold rounded-xl text-rose-400 border border-rose-950 bg-rose-950/20 hover:bg-rose-950/40 hover:text-rose-300 transition-colors"
         >
           {isAr ? 'إلغاء الموعد' : 'Cancel Booking'}
         </button>
-        <button
-          onClick={onTriggerReschedule}
-          className="flex-[2] md:flex-none px-5 py-2.5 text-xs font-bold rounded-xl bg-amber-500 text-amber-950 shadow-md shadow-amber-500/10 hover:scale-[1.02] active:scale-[0.98] transition-all"
-        >
-          {isAr ? 'نقل الموعد المجدول' : 'Relocate Slot'}
-        </button>
+        {isRescheduling ? (
+          <>
+            <button
+              disabled
+              className="flex-[2] md:flex-none px-5 py-2.5 text-xs font-bold rounded-xl bg-amber-500/30 text-amber-500/50 cursor-not-allowed border border-amber-500/20"
+            >
+              {isAr ? 'جاري اختيار موعد جديد' : 'Choosing new slot...'}
+            </button>
+            {onCancelReschedule && (
+              <button
+                type="button"
+                onClick={onCancelReschedule}
+                className="flex-1 md:flex-none px-4 py-2.5 text-xs font-bold rounded-xl text-slate-300 border border-slate-700 bg-slate-900/50 hover:bg-slate-800 transition-colors"
+              >
+                {isAr ? 'إلغاء وضع النقل' : 'Cancel Rescheduling'}
+              </button>
+            )}
+          </>
+        ) : (
+          <button
+            onClick={onTriggerReschedule}
+            className="flex-[2] md:flex-none px-5 py-2.5 text-xs font-bold rounded-xl bg-amber-500 text-amber-950 shadow-md shadow-amber-500/10 hover:scale-[1.02] active:scale-[0.98] transition-all"
+          >
+            {isAr ? 'نقل الموعد المجدول' : 'Relocate Slot'}
+          </button>
+        )}
       </div>
 
     </div>
