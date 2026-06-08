@@ -34,17 +34,9 @@ export default function DoctorLogin() {
       setLoading(false);
     } else {
       setError('');
-      try {
-        router.refresh();
-        router.replace('/doctor');
-      } catch (err) {
-        console.error('Router redirect failed, using fallback:', err);
+      if (typeof window !== 'undefined') {
+        window.location.href = '/doctor';
       }
-      setTimeout(() => {
-        if (typeof window !== 'undefined' && window.location.pathname.includes('/login')) {
-          window.location.href = '/doctor';
-        }
-      }, 500);
     }
   };
 
