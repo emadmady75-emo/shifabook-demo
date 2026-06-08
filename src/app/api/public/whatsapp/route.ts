@@ -37,6 +37,15 @@ export async function POST(request: NextRequest) {
       ...data // Merges properties (patient_name, patient_phone, etc.) to the root level
     };
 
+    // Required Debug Log: [WHATSAPP_PAYLOAD_OUT]
+    console.log('[WHATSAPP_PAYLOAD_OUT]', {
+      event_type,
+      actor_label: data.actor_label,
+      message: data.message,
+      rescheduled_by: data.rescheduled_by,
+      cancelled_by: data.cancelled_by
+    });
+
     let responseBody = '';
     let responseStatus = 500;
     let responseOk = false;
