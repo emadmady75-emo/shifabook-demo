@@ -21,7 +21,7 @@ interface DoctorDashboardClientProps {
 }
 
 export default function DoctorDashboardClient({ doctor, initialAppointments }: DoctorDashboardClientProps) {
-  const { language, doctorProfile, setBookings, setIsLoadingAvailability, clinicUser, refreshProfile } = useBooking();
+  const { language, doctorProfile, setBookings, setIsLoadingAvailability, clinicUser, refreshProfile, isLoadingProfile } = useBooking();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'crm' | 'users' | 'finance'>('dashboard');
   const isAr = language === 'ar';
   const router = useRouter();
@@ -137,6 +137,30 @@ export default function DoctorDashboardClient({ doctor, initialAppointments }: D
       default: return role;
     }
   };
+
+  if (isLoadingProfile) {
+    return (
+      <div className="flex flex-col min-h-screen bg-[#050b0f]" dir="rtl">
+        <Navbar />
+        <main className="flex-grow flex items-center justify-center py-20 px-4">
+          <div className="max-w-md w-full text-center space-y-6 glass-panel rounded-3xl p-8 border border-teal-500/20 shadow-2xl">
+            <div className="w-10 h-10 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mx-auto" />
+            <div className="space-y-2">
+              <h2 className="text-lg font-black text-white">
+                {isAr ? 'جاري تحميل لوحة الإدارة...' : 'Loading Dashboard...'}
+              </h2>
+              <p className="text-xs text-slate-400">
+                {isAr 
+                  ? 'يرجى الانتظار لحين تحميل بيانات الحساب والصلاحيات.' 
+                  : 'Please wait while account and permission data are being loaded.'}
+              </p>
+            </div>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <>
