@@ -352,7 +352,7 @@ export default function DoctorPublicBookingPage() {
                   <div className="pt-2.5 border-t border-teal-950/60 text-right space-y-1">
                     <span className="text-[10px] text-slate-500 block">{isAr ? 'جهة التعديل:' : 'Modified By:'}</span>
                     <span className="font-bold text-slate-200 block text-xs">
-                      {isAr ? getActorArabicLabel(lastCompletedBooking.rescheduled_by) : lastCompletedBooking.rescheduled_by}
+                      {getActorArabicLabel(lastCompletedBooking.rescheduled_by, isAr ? 'ar' : 'en')}
                     </span>
                   </div>
                 )}

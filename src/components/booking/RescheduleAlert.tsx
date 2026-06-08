@@ -69,7 +69,7 @@ export default function RescheduleAlert({ onTriggerReschedule, onClear, isResche
             <p className="text-[10px] text-teal-400 font-bold">
               {isAr 
                 ? `جهة التعديل: ${getActorArabicLabel(activeBooking.rescheduled_by)}`
-                : `Modified By: ${activeBooking.rescheduled_by}`}
+                : `Modified By: ${getActorArabicLabel(activeBooking.rescheduled_by, 'en')}`}
             </p>
           )}
           <p className="text-[10px] text-slate-400">
