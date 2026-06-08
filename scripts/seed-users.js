@@ -64,46 +64,26 @@ async function seed() {
     return;
   }
 
+  // Retrieve all existing auth users first
+  const { data: authUsersResult, error: listErr } = await supabaseAdmin.auth.admin.listUsers();
+  if (listErr) {
+    console.error("Error listing auth users:", listErr.message);
+    return;
+  }
+  const authUsers = authUsersResult.users || [];
+
   const generatedCredentials = [];
 
   for (const user of TEST_USERS) {
     const tempPassword = generateRandomPassword();
     console.log(`Processing user: ${user.email} (${user.role})...`);
 
-    // Check if user already exists in clinic_users
-    const { data: existingProfile, error: profileErr } = await supabaseAdmin
-      .from('clinic_users')
-      .select('*')
-      .eq('email', user.email)
-      .limit(1);
-
-    if (existingProfile && existingProfile.length > 0) {
-      console.log(`- Profile already exists for ${user.email}. Skipping Auth creation.`);
-      
-      // Update role and password reset flag
-      await supabaseAdmin
-        .from('clinic_users')
-        .update({ 
-          role: user.role,
-          password_reset_required: true
-        })
-        .eq('email', user.email);
-      console.log(`- Updated role to ${user.role} and set password_reset_required to true.`);
-      continue;
-    }
-
-    // Attempt to create auth user
-    // First, list users to see if they exist in auth but not profile
-    const { data: authUsers, error: listErr } = await supabaseAdmin.auth.admin.listUsers();
-    if (listErr) {
-      console.error("- Error listing auth users:", listErr.message);
-      continue;
-    }
-
-    let authUser = authUsers.users.find(u => u.email === user.email);
+    // 1. Resolve Auth user
+    let authUser = authUsers.find(u => u.email === user.email);
     let userId = authUser ? authUser.id : null;
 
     if (!authUser) {
+      // Create new Auth user
       const { data: newAuthUser, error: createErr } = await supabaseAdmin.auth.admin.createUser({
         email: user.email,
         password: tempPassword,
@@ -119,34 +99,61 @@ async function seed() {
       userId = newAuthUser.user.id;
       console.log(`- Created new Auth user with ID: ${userId}`);
     } else {
-      console.log(`- Auth user already exists with ID: ${userId}`);
-      // If user exists, reset password to random
+      console.log(`- Auth user already exists with ID: ${userId}. Resetting password.`);
+      // If user exists, reset password
       const { error: resetPassErr } = await supabaseAdmin.auth.admin.updateUserById(userId, {
         password: tempPassword
       });
       if (resetPassErr) {
-        console.error(`- Error resetting auth password for existing user:`, resetPassErr.message);
-      } else {
-        console.log(`- Reset existing auth password to a new random temporary credential.`);
+        console.error(`- Error resetting auth password for existing user ${user.email}:`, resetPassErr.message);
+        continue;
       }
+      console.log(`- Reset existing auth password to a new random temporary credential.`);
     }
 
-    // Insert into clinic_users
-    const { error: insertErr } = await supabaseAdmin
+    // 2. Resolve clinic_users Profile
+    const { data: existingProfile, error: profileErr } = await supabaseAdmin
       .from('clinic_users')
-      .insert({
-        email: user.email,
-        full_name: user.full_name,
-        role: user.role,
-        is_active: true,
-        auth_user_id: userId,
-        password_reset_required: true
-      });
+      .select('*')
+      .eq('email', user.email)
+      .limit(1);
 
-    if (insertErr) {
-      console.error(`- Error inserting clinic_users profile:`, insertErr.message);
+    if (existingProfile && existingProfile.length > 0) {
+      console.log(`- Profile already exists for ${user.email}. Updating role and reset flag.`);
+      
+      // Update role, password_reset_required flag, and make sure auth_user_id is mapped correctly
+      const { error: updateErr } = await supabaseAdmin
+        .from('clinic_users')
+        .update({ 
+          role: user.role,
+          password_reset_required: true,
+          auth_user_id: userId
+        })
+        .eq('email', user.email);
+
+      if (updateErr) {
+        console.error(`- Error updating clinic_users profile for ${user.email}:`, updateErr.message);
+      } else {
+        console.log(`- Profile updated successfully.`);
+      }
     } else {
-      console.log(`- Profile linked successfully!`);
+      // Insert new profile into clinic_users
+      const { error: insertErr } = await supabaseAdmin
+        .from('clinic_users')
+        .insert({
+          email: user.email,
+          full_name: user.full_name,
+          role: user.role,
+          is_active: true,
+          auth_user_id: userId,
+          password_reset_required: true
+        });
+
+      if (insertErr) {
+        console.error(`- Error inserting clinic_users profile for ${user.email}:`, insertErr.message);
+      } else {
+        console.log(`- Profile created and linked successfully.`);
+      }
     }
 
     generatedCredentials.push({ email: user.email, password: tempPassword, role: user.role });
