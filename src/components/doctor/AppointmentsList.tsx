@@ -121,6 +121,20 @@ export default function AppointmentsList() {
     });
   };
 
+  function isAppointmentPast(dateStr: string, timeStr: string): boolean {
+    if (!dateStr || !timeStr || typeof timeStr !== 'string' || !timeStr.includes(':')) {
+      return false;
+    }
+    const now = new Date();
+    const todayStr = formatDateOnly(now);
+    if (dateStr < todayStr) return true;
+    if (dateStr > todayStr) return false;
+    const [h, m] = timeStr.split(':').map(Number);
+    const currentTotalMin = now.getHours() * 60 + now.getMinutes();
+    const slotTotalMin = h * 60 + m;
+    return slotTotalMin < currentTotalMin;
+  }
+
   const activeBookings = bookings.filter(b => b.status !== 'cancelled').sort((a, b) => {
     return a.date.localeCompare(b.date) || a.timeSlot.localeCompare(b.timeSlot);
   });
@@ -145,20 +159,6 @@ export default function AppointmentsList() {
     const suffix = isAr ? (hr >= 12 ? 'م' : 'ص') : (hr >= 12 ? 'PM' : 'AM');
     const displayHr = hr > 12 ? hr - 12 : hr === 0 ? 12 : hr;
     return `${displayHr}:${m} ${suffix}`;
-  };
-
-  const isAppointmentPast = (dateStr: string, timeStr: string): boolean => {
-    if (!dateStr || !timeStr || typeof timeStr !== 'string' || !timeStr.includes(':')) {
-      return false;
-    }
-    const now = new Date();
-    const todayStr = formatDateOnly(now);
-    if (dateStr < todayStr) return true;
-    if (dateStr > todayStr) return false;
-    const [h, m] = timeStr.split(':').map(Number);
-    const currentTotalMin = now.getHours() * 60 + now.getMinutes();
-    const slotTotalMin = h * 60 + m;
-    return slotTotalMin < currentTotalMin;
   };
 
   const getStatusBadge = (appt: PatientBooking) => {

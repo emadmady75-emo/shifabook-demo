@@ -99,6 +99,7 @@ interface BookingContextType {
   refreshAppointments: () => Promise<void>;
   refreshProfile?: () => Promise<void>;
   clinicUser: ClinicUser | null;
+  isLoadingProfile?: boolean;
 }
 
 const BookingContext = createContext<BookingContextType | undefined>(undefined);
@@ -126,6 +127,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [doctorProfile, setDoctorProfile] = useState<DoctorProfile>(INITIAL_DOCTOR);
   const [isHydrated, setIsHydrated] = useState(false);
   const [isLoadingAvailability, setIsLoadingAvailability] = useState(true);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [clinicUser, setClinicUser] = useState<ClinicUser | null>(null);
 
   const setSelectedFacility = (fac: Facility) => {
@@ -134,6 +136,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const fetchProfile = async () => {
+    setIsLoadingProfile(true);
     try {
       const { createClient } = await import('@/lib/supabase/client');
       const supabase = createClient();
@@ -201,6 +204,8 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
     } catch (err) {
       console.error('Error fetching doctor profile in BookingProvider:', err);
+    } finally {
+      setIsLoadingProfile(false);
     }
   };
 
@@ -1304,7 +1309,8 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         checkPhoneBookings,
         refreshAppointments,
         refreshProfile: fetchProfile,
-        clinicUser
+        clinicUser,
+        isLoadingProfile
       }}
     >
       {children}
