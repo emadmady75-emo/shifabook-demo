@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createSupabaseAdminClient } from '@supabase/supabase-js';
+import crypto from 'crypto';
 
 // Initialize the Supabase admin client using service role key
 const getAdminClient = () => {
@@ -186,10 +187,11 @@ export async function PUT(request: NextRequest) {
   const supabaseAdmin = getAdminClient();
 
   try {
-    const { id, role, is_active } = await request.json();
+    const body = await request.json();
+    const { id, role, is_active, action } = body;
 
-    if (!id || !role || is_active === undefined) {
-      return NextResponse.json({ error: 'البيانات غير مكتملة للتعديل.' }, { status: 400 });
+    if (!id) {
+      return NextResponse.json({ error: 'معرف المستخدم مطلوب.' }, { status: 400 });
     }
 
     // Fetch the target clinic_user profile
@@ -205,7 +207,45 @@ export async function PUT(request: NextRequest) {
 
     // Prevent modifying self
     if (targetUser.auth_user_id === caller.id) {
-      return NextResponse.json({ error: 'لا يمكنك تعديل صلاحياتك أو إلغاء تفعيل حسابك بنفسك.' }, { status: 400 });
+      return NextResponse.json({ error: 'لا يمكنك تعديل صلاحياتك، إلغاء تفعيل حسابك، أو إعادة تعيين كلمة مرورك بنفسك.' }, { status: 400 });
+    }
+
+    if (action === 'reset_password') {
+      const randomStr = crypto.randomBytes(9).toString('base64')
+        .replace(/[^a-zA-Z0-9]/g, '')
+        .substring(0, 10);
+      const tempPassword = `${randomStr}Aa1!`;
+
+      // 1. Update Auth user's password using admin client
+      const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(targetUser.auth_user_id, {
+        password: tempPassword
+      });
+
+      if (authError) {
+        console.error('Error updating auth password:', authError);
+        return NextResponse.json({ error: 'فشل تحديث كلمة المرور في نظام المصادقة.' }, { status: 500 });
+      }
+
+      // 2. Set password_reset_required = true
+      const { error: dbError } = await supabaseAdmin
+        .from('clinic_users')
+        .update({ 
+          password_reset_required: true,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id);
+
+      if (dbError) {
+        console.error('Database error setting reset flag:', dbError);
+        return NextResponse.json({ error: 'فشل تحديث حالة إعادة تعيين كلمة المرور في قاعدة البيانات.' }, { status: 500 });
+      }
+
+      return NextResponse.json({ success: true, tempPassword });
+    }
+
+    // Standard role/status update logic
+    if (!role || is_active === undefined) {
+      return NextResponse.json({ error: 'البيانات غير مكتملة للتعديل.' }, { status: 400 });
     }
 
     // 1. Update clinic_users
@@ -253,4 +293,5 @@ export async function PUT(request: NextRequest) {
     console.error('Error in PUT clinic user:', err);
     return NextResponse.json({ error: err.message || 'حدث خطأ غير متوقع.' }, { status: 500 });
   }
+
 }

@@ -168,6 +168,38 @@ export default function UserManagement() {
     }
   };
 
+  const handleResetPassword = async (userId: string) => {
+    if (!confirm(isAr ? 'هل أنت متأكد من إعادة تعيين كلمة مرور هذا المستخدم؟' : 'Are you sure you want to reset this user\'s password?')) {
+      return;
+    }
+    setUpdateMessage(null);
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: userId,
+          action: 'reset_password'
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(isAr 
+          ? `تمت إعادة تعيين كلمة المرور بنجاح!\n\nكلمة المرور المؤقتة الجديدة هي:\n${data.tempPassword}\n\nيرجى نسخها وإعطاؤها للمستخدم. سيطلب منه النظام تغييرها عند تسجيل الدخول الأول.` 
+          : `Password reset successfully!\n\nNew temporary password:\n${data.tempPassword}\n\nPlease copy it and give it to the user. They will be forced to change it on first login.`
+        );
+        setUpdateMessage({ 
+          type: 'success', 
+          text: isAr ? `تمت إعادة تعيين كلمة المرور. كلمة المرور المؤقتة هي: ${data.tempPassword}` : `Password reset. Temp password: ${data.tempPassword}` 
+        });
+      } else {
+        setUpdateMessage({ type: 'error', text: data.error || (isAr ? 'فشل إعادة تعيين كلمة المرور.' : 'Password reset failed.') });
+      }
+    } catch (err) {
+      setUpdateMessage({ type: 'error', text: isAr ? 'حدث خطأ في الشبكة.' : 'Network error.' });
+    }
+  };
+
   const getRoleBadge = (userRole: string) => {
     switch (userRole) {
       case 'admin':
@@ -367,19 +399,29 @@ export default function UserManagement() {
                         )}
                       </td>
                       <td className="py-3 text-left">
-                        <button
-                          disabled={isSelf}
-                          onClick={() => handleToggleActive(user.id, user.is_active)}
-                          className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 ${
-                            user.is_active 
-                              ? 'bg-rose-500/10 text-rose-400 border border-rose-950 hover:bg-rose-950/40' 
-                              : 'bg-emerald-500/10 text-emerald-400 border border-emerald-950 hover:bg-[#0d2a2f]'
-                          }`}
-                        >
-                          {user.is_active 
-                            ? (isAr ? 'تعطيل الحساب' : 'Deactivate') 
-                            : (isAr ? 'تفعيل الحساب' : 'Activate')}
-                        </button>
+                        <div className="flex justify-end gap-2">
+                          <button
+                            disabled={isSelf}
+                            onClick={() => handleResetPassword(user.id)}
+                            className="px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 bg-amber-500/10 text-amber-400 border border-amber-950/20 hover:bg-amber-950/40"
+                          >
+                            {isAr ? 'إعادة تعيين' : 'Reset Pass'}
+                          </button>
+                          
+                          <button
+                            disabled={isSelf}
+                            onClick={() => handleToggleActive(user.id, user.is_active)}
+                            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 ${
+                              user.is_active 
+                                ? 'bg-rose-500/10 text-rose-400 border border-rose-950 hover:bg-rose-950/40' 
+                                : 'bg-emerald-500/10 text-emerald-400 border border-emerald-950 hover:bg-[#0d2a2f]'
+                            }`}
+                          >
+                            {user.is_active 
+                              ? (isAr ? 'تعطيل' : 'Deactivate') 
+                              : (isAr ? 'تفعيل' : 'Activate')}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
