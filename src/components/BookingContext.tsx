@@ -23,7 +23,7 @@ export interface PatientBooking {
   mobileNumber: string;
   date: string;       // YYYY-MM-DD
   timeSlot: string;   // HH:MM
-  status: 'pending' | 'confirmed' | 'cancelled';
+  status: 'pending' | 'confirmed' | 'cancelled' | 'attended';
   price: number;      // Revenue Tracking (e.g. 500 EGP)
   createdAt: string;
   facilityName?: string;
@@ -49,6 +49,16 @@ export interface WhatsAppEvent {
   status: 'sent' | 'delivered' | 'read' | 'replied';
 }
 
+export interface ClinicUser {
+  id: string;
+  email: string;
+  full_name: string;
+  role: 'admin' | 'supervisor' | 'user' | 'accountant';
+  is_active: boolean;
+  auth_user_id: string;
+  created_at: string;
+}
+
 interface BookingContextType {
   bookings: PatientBooking[];
   setBookings: React.Dispatch<React.SetStateAction<PatientBooking[]>>;
@@ -66,6 +76,7 @@ interface BookingContextType {
   rescheduleAppointment: (bookingId: string, newDate: string, newTime: string, rescheduledBy?: 'patient' | 'doctor') => Promise<boolean>;
   cancelAppointment: (bookingId: string) => Promise<void>;
   confirmAttendance: (bookingId: string) => Promise<void>;
+  markAttended: (bookingId: string) => Promise<void>;
   triggerMockWhatsAppEvent: (type: WhatsAppEvent['type'], booking: PatientBooking) => void;
   generateTimeSlotsForDate: (dateStr: string) => TimeSlot[];
   isHydrated: boolean;
@@ -86,6 +97,7 @@ interface BookingContextType {
   checkPhoneBookings: (phone: string) => Promise<{ activeBooking: PatientBooking | null; patientName: string }>;
   refreshAppointments: () => Promise<void>;
   refreshProfile?: () => Promise<void>;
+  clinicUser: ClinicUser | null;
 }
 
 const BookingContext = createContext<BookingContextType | undefined>(undefined);
@@ -113,6 +125,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [doctorProfile, setDoctorProfile] = useState<DoctorProfile>(INITIAL_DOCTOR);
   const [isHydrated, setIsHydrated] = useState(false);
   const [isLoadingAvailability, setIsLoadingAvailability] = useState(true);
+  const [clinicUser, setClinicUser] = useState<ClinicUser | null>(null);
 
   const setSelectedFacility = (fac: Facility) => {
     setSelectedFacilityState(fac);
@@ -123,6 +136,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       const { createClient } = await import('@/lib/supabase/client');
       const supabase = createClient();
+      
       const { data, error } = await supabase.from('doctors').select('*').limit(1);
       if (!error && data && data.length > 0) {
         const doc = data[0];
@@ -141,6 +155,45 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           city: doc.city,
         });
       }
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        try {
+          const { data: clinicUserData, error: userError } = await supabase
+            .from('clinic_users')
+            .select('*')
+            .eq('auth_user_id', user.id)
+            .single();
+
+          if (!userError && clinicUserData) {
+            setClinicUser(clinicUserData);
+          } else {
+            // Seeded doctor or default fallback
+            setClinicUser({
+              id: user.id,
+              email: user.email || 'doctor@shifabook.com',
+              full_name: user.user_metadata?.full_name || 'د. عبدالرحمن المصري',
+              role: 'admin',
+              is_active: true,
+              auth_user_id: user.id,
+              created_at: new Date().toISOString()
+            });
+          }
+        } catch (dbErr) {
+          // Graceful fallback if clinic_users table is not yet created
+          setClinicUser({
+            id: user.id,
+            email: user.email || 'doctor@shifabook.com',
+            full_name: user.user_metadata?.full_name || 'د. عبدالرحمن المصري',
+            role: 'admin',
+            is_active: true,
+            auth_user_id: user.id,
+            created_at: new Date().toISOString()
+          });
+        }
+      } else {
+        setClinicUser(null);
+      }
     } catch (err) {
       console.error('Error fetching doctor profile in BookingProvider:', err);
     }
@@ -149,6 +202,15 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Load from localStorage on mount
   useEffect(() => {
     fetchProfile();
+
+    let authSub: any = null;
+    import('@/lib/supabase/client').then(({ createClient }) => {
+      const client = createClient();
+      const { data } = client.auth.onAuthStateChange(() => {
+        fetchProfile();
+      });
+      authSub = data.subscription;
+    });
 
     // Clear legacy shifabook_bookings key
     localStorage.removeItem('shifabook_bookings');
@@ -223,6 +285,10 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     localStorage.removeItem('shifabook_wa_events');
     
     setIsHydrated(true);
+
+    return () => {
+      if (authSub) authSub.unsubscribe();
+    };
   }, []);
 
   const saveConfig = (newConfig: ScheduleConfig) => {
@@ -503,6 +569,13 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     newTime: string,
     rescheduledBy: 'patient' | 'doctor' = 'patient'
   ) => {
+    // 1. Role enforcement
+    if (clinicUser && clinicUser.role === 'accountant') {
+      const errorMsg = language === 'ar' ? "ليس لديك صلاحية لتنفيذ هذا الإجراء." : "You do not have permission to perform this action.";
+      if (typeof window !== 'undefined') window.alert(errorMsg);
+      throw new Error(errorMsg);
+    }
+
     const bookingToMove = activeBooking && activeBooking.id === bookingId ? activeBooking : bookings.find(b => b.id === bookingId);
     if (!bookingToMove) return false;
 
@@ -521,17 +594,42 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       try {
         const { createClient } = await import('@/lib/supabase/client');
         const supabase = createClient();
+
+        // Audit fields prep
+        let updateData: any = {
+          appointment_date: newDate,
+          appointment_time: newTime,
+          status: newStatus
+        };
+
+        if (clinicUser) {
+          updateData.rescheduled_by = `${clinicUser.full_name} (${clinicUser.role})`;
+          updateData.rescheduled_at = new Date().toISOString();
+        } else {
+          updateData.rescheduled_by = 'patient';
+          updateData.rescheduled_at = new Date().toISOString();
+        }
+
         const { error } = await supabase
           .from('appointments')
-          .update({
-            appointment_date: newDate,
-            appointment_time: newTime,
-            status: newStatus
-          })
+          .update(updateData)
           .eq('id', bookingId);
 
         if (error) {
-          throw error;
+          // Graceful fallback for missing columns
+          if (error.code === '42703') {
+            const fallbackResult = await supabase
+              .from('appointments')
+              .update({
+                appointment_date: newDate,
+                appointment_time: newTime,
+                status: newStatus
+              })
+              .eq('id', bookingId);
+            if (fallbackResult.error) throw fallbackResult.error;
+          } else {
+            throw error;
+          }
         }
 
         // Trigger WhatsApp webhook bridge for rescheduling
@@ -551,7 +649,9 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
               facility_address: language === 'ar' ? selectedFacility.address : selectedFacility.addressEn,
               facility_map_url: selectedFacility.mapUrl,
               booking_id: bookingId,
-              rescheduled_by: rescheduledBy
+              rescheduled_by: rescheduledBy,
+              performed_by_role: clinicUser ? clinicUser.role : 'patient',
+              performed_by_name: clinicUser ? clinicUser.full_name : bookingToMove.patientName
             }
           };
 
@@ -614,29 +714,62 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const targetId = (activeBooking && activeBooking.id) ? activeBooking.id : bookingId;
     if (!targetId) return;
 
+    // 1. Role enforcement
+    if (clinicUser && clinicUser.role !== 'admin') {
+      const errorMsg = language === 'ar' ? "ليس لديك صلاحية لتنفيذ هذا الإجراء." : "You do not have permission to perform this action.";
+      if (typeof window !== 'undefined') window.alert(errorMsg);
+      throw new Error(errorMsg);
+    }
+
     // If it's a Supabase UUID
     if (typeof targetId === 'string' && targetId.length === 36) {
       try {
         const { createClient } = await import('@/lib/supabase/client');
         const supabase = createClient();
-        const { data, error } = await supabase
+
+        // Audit fields prep
+        let updateData: any = { status: 'cancelled' };
+        if (clinicUser) {
+          updateData.cancelled_by = `${clinicUser.full_name} (${clinicUser.role})`;
+          updateData.cancelled_at = new Date().toISOString();
+        } else {
+          updateData.cancelled_by = 'patient';
+          updateData.cancelled_at = new Date().toISOString();
+        }
+
+        let data = null;
+        const { data: updatedData, error } = await supabase
           .from('appointments')
-          .update({ status: 'cancelled' })
+          .update(updateData)
           .eq('id', targetId)
           .select()
           .single();
 
         if (error) {
-          console.error('Supabase cancellation error:', error);
-          throw new Error(error.message || 'Failed to cancel appointment in Supabase');
+          if (error.code === '42703') {
+            const fallbackResult = await supabase
+              .from('appointments')
+              .update({ status: 'cancelled' })
+              .eq('id', targetId)
+              .select()
+              .single();
+            if (fallbackResult.error) throw fallbackResult.error;
+            data = fallbackResult.data;
+          } else {
+            console.error('Supabase cancellation error:', error);
+            throw new Error(error.message || 'Failed to cancel appointment in Supabase');
+          }
+        } else {
+          data = updatedData;
         }
+
         console.log('Successfully cancelled appointment in Supabase:', data);
 
         // Trigger WhatsApp cancellation event
         if (data) {
           try {
             const facility = DEMO_FACILITIES.find(f => f.id === data.facility_id) || DEMO_FACILITIES[0];
-            const cancelledBy = typeof window !== 'undefined' && window.location.pathname.startsWith('/doctor') ? 'doctor' : 'patient';
+            const cancelledBy = clinicUser ? 'doctor' : 'patient';
 
             const payload = {
               event_type: 'booking.cancelled',
@@ -651,7 +784,9 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 facility_address: language === 'ar' ? facility.address : facility.addressEn,
                 facility_map_url: facility.mapUrl,
                 booking_id: data.id,
-                cancelled_by: cancelledBy
+                cancelled_by: cancelledBy,
+                performed_by_role: clinicUser ? clinicUser.role : 'patient',
+                performed_by_name: clinicUser ? clinicUser.full_name : data.patient_name
               }
             };
 
@@ -697,15 +832,39 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const confirmAttendance = async (bookingId: string) => {
+    if (clinicUser && clinicUser.role === 'accountant') {
+      const errorMsg = language === 'ar' ? "ليس لديك صلاحية لتنفيذ هذا الإجراء." : "You do not have permission to perform this action.";
+      if (typeof window !== 'undefined') window.alert(errorMsg);
+      throw new Error(errorMsg);
+    }
+
     // If it's a Supabase UUID
     if (bookingId.length === 36) {
       try {
         const { createClient } = await import('@/lib/supabase/client');
         const supabase = createClient();
-        await supabase
+
+        let updateData: any = { status: 'confirmed' };
+        if (clinicUser) {
+          updateData.confirmed_by = `${clinicUser.full_name} (${clinicUser.role})`;
+          updateData.confirmed_at = new Date().toISOString();
+        }
+
+        const { error } = await supabase
           .from('appointments')
-          .update({ status: 'confirmed' })
+          .update(updateData)
           .eq('id', bookingId);
+
+        if (error) {
+          if (error.code === '42703') {
+            await supabase
+              .from('appointments')
+              .update({ status: 'confirmed' })
+              .eq('id', bookingId);
+          } else {
+            throw error;
+          }
+        }
       } catch (err) {
         console.error('Failed to confirm attendance in Supabase:', err);
       }
@@ -714,6 +873,55 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const updated = bookings.map(b => {
       if (b.id === bookingId) {
         return { ...b, status: 'confirmed' as const };
+      }
+      return b;
+    });
+    setBookings(updated);
+    await refreshAppointments();
+  };
+
+  const markAttended = async (bookingId: string) => {
+    if (clinicUser && !['admin', 'supervisor'].includes(clinicUser.role)) {
+      const errorMsg = language === 'ar' ? "ليس لديك صلاحية لتنفيذ هذا الإجراء." : "You do not have permission to perform this action.";
+      if (typeof window !== 'undefined') window.alert(errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    // If it's a Supabase UUID
+    if (bookingId.length === 36) {
+      try {
+        const { createClient } = await import('@/lib/supabase/client');
+        const supabase = createClient();
+
+        let updateData: any = { status: 'attended' };
+        if (clinicUser) {
+          updateData.attended_by = `${clinicUser.full_name} (${clinicUser.role})`;
+          updateData.attended_at = new Date().toISOString();
+        }
+
+        const { error } = await supabase
+          .from('appointments')
+          .update(updateData)
+          .eq('id', bookingId);
+
+        if (error) {
+          if (error.code === '42703') {
+            await supabase
+              .from('appointments')
+              .update({ status: 'attended' })
+              .eq('id', bookingId);
+          } else {
+            throw error;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to mark attended in Supabase:', err);
+      }
+    }
+
+    const updated = bookings.map(b => {
+      if (b.id === bookingId) {
+        return { ...b, status: 'attended' as any };
       }
       return b;
     });
@@ -1050,6 +1258,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         rescheduleAppointment,
         cancelAppointment,
         confirmAttendance,
+        markAttended,
         triggerMockWhatsAppEvent,
         generateTimeSlotsForDate,
         isHydrated,
@@ -1070,6 +1279,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         checkPhoneBookings,
         refreshAppointments,
         refreshProfile: fetchProfile,
+        clinicUser
       }}
     >
       {children}

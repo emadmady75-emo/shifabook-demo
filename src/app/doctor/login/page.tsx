@@ -62,7 +62,7 @@ export default function DoctorLogin() {
 
           <div className="text-center space-y-1">
             <h2 className="text-xl font-black text-white">
-              {isAr ? 'تسجيل دخول الطبيب' : 'Doctor Login'}
+              {isAr ? 'تسجيل دخول لوحة الإدارة' : 'Admin Dashboard Login'}
             </h2>
             <p className="text-xs text-slate-400">
               {isAr ? 'الرجاء إدخال البريد الإلكتروني وكلمة المرور للمتابعة' : 'Enter your email and password to continue'}

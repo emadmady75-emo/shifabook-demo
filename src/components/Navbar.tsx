@@ -54,7 +54,7 @@ export default function Navbar() {
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
             </svg>
-            {isAr ? 'لوحة الطبيب' : 'Doctor Portal'}
+            {isAr ? 'لوحة الإدارة' : 'Admin Dashboard'}
           </Link>
 
           {/* Book CTA in nav */}
@@ -103,7 +103,7 @@ export default function Navbar() {
             onClick={() => setMenuOpen(false)}
             className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-teal-800/50 bg-teal-950/20 text-teal-300 font-bold text-sm"
           >
-            {isAr ? 'لوحة تحكم الطبيب' : 'Doctor Portal'}
+            {isAr ? 'لوحة الإدارة' : 'Admin Dashboard'}
           </Link>
           <button
             onClick={handleLanguageToggle}

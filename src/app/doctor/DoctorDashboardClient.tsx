@@ -9,6 +9,7 @@ import ScheduleBuilder from '@/components/doctor/ScheduleBuilder';
 import AppointmentsList from '@/components/doctor/AppointmentsList';
 import ProfileSettings from '@/components/doctor/ProfileSettings';
 import PatientCRM from '@/components/doctor/PatientCRM';
+import UserManagement from '@/components/doctor/UserManagement';
 import { useBooking } from '@/components/BookingContext';
 import { createClient } from '@/lib/supabase/client';
 import { SupabaseDoctor, SupabaseAppointment } from './page';
@@ -19,8 +20,8 @@ interface DoctorDashboardClientProps {
 }
 
 export default function DoctorDashboardClient({ doctor, initialAppointments }: DoctorDashboardClientProps) {
-  const { language, doctorProfile, setBookings, setIsLoadingAvailability } = useBooking();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'crm'>('dashboard');
+  const { language, doctorProfile, setBookings, setIsLoadingAvailability, clinicUser } = useBooking();
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'crm' | 'users'>('dashboard');
   const isAr = language === 'ar';
   const router = useRouter();
   const supabase = createClient();
@@ -40,10 +41,37 @@ export default function DoctorDashboardClient({ doctor, initialAppointments }: D
     setIsLoadingAvailability(false);
   }, [initialAppointments, doctor.consultation_fee, setBookings, setIsLoadingAvailability]);
 
+  // Tab permission guards
+  useEffect(() => {
+    if (activeTab === 'users' && clinicUser?.role !== 'admin') {
+      setActiveTab('dashboard');
+    }
+    if (activeTab === 'crm' && clinicUser?.role === 'accountant') {
+      setActiveTab('dashboard');
+    }
+  }, [activeTab, clinicUser]);
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.refresh();
     router.push('/doctor/login');
+  };
+
+  // UI elements visibility checks based on roles
+  const showStats = clinicUser?.role !== 'user';
+  const showSchedule = clinicUser?.role === 'admin' || clinicUser?.role === 'supervisor';
+  const showProfileSettings = clinicUser?.role === 'admin';
+  const showSidebar = showSchedule || showProfileSettings;
+
+  const getRoleLabel = (role?: string) => {
+    if (!role) return '';
+    switch (role) {
+      case 'admin': return isAr ? 'مدير النظام' : 'Admin';
+      case 'supervisor': return isAr ? 'مشرف العيادة' : 'Supervisor';
+      case 'user': return isAr ? 'موظف استقبال' : 'Receptionist';
+      case 'accountant': return isAr ? 'المحاسب المالي' : 'Accountant';
+      default: return role;
+    }
   };
 
   return (
@@ -69,12 +97,12 @@ export default function DoctorDashboardClient({ doctor, initialAppointments }: D
                 </button>
               </div>
               <h1 className="text-2xl sm:text-3xl font-black text-white">
-                {isAr ? 'لوحة الأداء والنمو المالي' : 'Clinic Dashboard & Revenue Growth'}
+                {isAr ? 'لوحة الإدارة والمتابعة' : 'Admin Dashboard & Management'}
               </h1>
               <p className="text-sm text-slate-400 max-w-xl leading-relaxed">
                 {isAr 
-                  ? `مرحباً د. ${doctor.full_name}. هذا ملخص أداء عيادتك (${doctor.clinic_name}) اليوم، شامل الإيرادات ونسب الإشغال.` 
-                  : `Welcome back, Dr. ${doctor.full_name}. Here is today's clinic summary at ${doctor.clinic_name}: revenue, occupancy, and bookings.`}
+                  ? `مرحباً ${clinicUser?.full_name || ''} (${getRoleLabel(clinicUser?.role)}). صلاحيتك تمنحك إمكانية إدارة عيادة (${doctor.clinic_name}).` 
+                  : `Welcome back, ${clinicUser?.full_name || ''} (${getRoleLabel(clinicUser?.role)}). You are managing ${doctor.clinic_name}.`}
               </p>
             </div>
             
@@ -124,41 +152,63 @@ export default function DoctorDashboardClient({ doctor, initialAppointments }: D
             >
               {isAr ? 'لوحة المتابعة وجدول العيادة' : 'Clinic Dashboard & Scheduler'}
             </button>
-            <button
-              onClick={() => setActiveTab('crm')}
-              className={`pb-3 text-sm font-black border-b-2 transition-all duration-200 ${
-                activeTab === 'crm'
-                  ? 'border-teal-500 text-teal-400 font-extrabold'
-                  : 'border-transparent text-slate-400 hover:text-white'
-              }`}
-            >
-              {isAr ? 'إدارة سجلات المرضى (CRM)' : 'Patient Directory & CRM'}
-            </button>
+            {clinicUser?.role !== 'accountant' && (
+              <button
+                onClick={() => setActiveTab('crm')}
+                className={`pb-3 text-sm font-black border-b-2 transition-all duration-200 ${
+                  activeTab === 'crm'
+                    ? 'border-teal-500 text-teal-400 font-extrabold'
+                    : 'border-transparent text-slate-400 hover:text-white'
+                }`}
+              >
+                {isAr ? 'إدارة سجلات المرضى (CRM)' : 'Patient Directory & CRM'}
+              </button>
+            )}
+            {clinicUser?.role === 'admin' && (
+              <button
+                onClick={() => setActiveTab('users')}
+                className={`pb-3 text-sm font-black border-b-2 transition-all duration-200 ${
+                  activeTab === 'users'
+                    ? 'border-teal-500 text-teal-400 font-extrabold'
+                    : 'border-transparent text-slate-400 hover:text-white'
+                }`}
+              >
+                {isAr ? 'إدارة المستخدمين' : 'User Management'}
+              </button>
+            )}
           </div>
 
-          {activeTab === 'dashboard' ? (
+          {activeTab === 'dashboard' && (
             <>
               {/* 1. Growth/Revenue Analytics Dashboard Widget */}
-              <StatsDashboard />
+              {showStats && <StatsDashboard />}
 
               {/* 2. Main Administration & Configuration Grid */}
               <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
                 
                 {/* Left Column: Weekly Schedule Configuration Builder Form & Profile Settings */}
-                <div className="xl:col-span-4 xl:sticky xl:top-24 space-y-8 max-h-[calc(100vh-8rem)] overflow-y-auto custom-scrollbar pr-1">
-                  <ScheduleBuilder />
-                  <ProfileSettings doctor={doctor} language={language} />
-                </div>
+                {showSidebar && (
+                  <div className="xl:col-span-4 xl:sticky xl:top-24 space-y-8 max-h-[calc(100vh-8rem)] overflow-y-auto custom-scrollbar pr-1">
+                    {showSchedule && <ScheduleBuilder />}
+                    {showProfileSettings && <ProfileSettings doctor={doctor} language={language} />}
+                  </div>
+                )}
 
                 {/* Right Column: Active Appointments Data Ledger & Live Webhooks Hub */}
-                <div className="xl:col-span-8">
+                <div className={showSidebar ? "xl:col-span-8" : "xl:col-span-12"}>
                   <AppointmentsList />
                 </div>
 
               </div>
             </>
-          ) : (
+          )}
+
+          {activeTab === 'crm' && clinicUser?.role !== 'accountant' && (
             <PatientCRM />
+          )}
+
+          {activeTab === 'users' && clinicUser?.role === 'admin' && (
+            <UserManagement />
           )}
 
         </div>

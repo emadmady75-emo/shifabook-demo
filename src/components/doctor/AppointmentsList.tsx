@@ -10,10 +10,12 @@ export default function AppointmentsList() {
     bookings, 
     cancelAppointment, 
     confirmAttendance, 
+    markAttended,
     whatsappEvents, 
     rescheduleAppointment, 
     generateTimeSlotsForDate, 
-    scheduleConfig 
+    scheduleConfig,
+    clinicUser
   } = useBooking();
   const isAr = language === 'ar';
 
@@ -123,6 +125,14 @@ export default function AppointmentsList() {
     return a.date.localeCompare(b.date) || a.timeSlot.localeCompare(b.timeSlot);
   });
 
+  const filteredActiveBookings = activeBookings.filter(appt => {
+    if (clinicUser?.role === 'accountant') {
+      const isPast = isAppointmentPast(appt.date, appt.timeSlot);
+      return appt.status === 'confirmed' || appt.status === 'attended' || isPast;
+    }
+    return true;
+  });
+
   const cancelledBookings = bookings.filter(b => b.status === 'cancelled').sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
   const formatPeriodTime = (timeStr: string) => {
@@ -161,7 +171,7 @@ export default function AppointmentsList() {
     }
 
     const isPast = isAppointmentPast(appt.date, appt.timeSlot);
-    if (isPast) {
+    if (appt.status === 'attended' || isPast) {
       return (
         <span className="px-2 py-1 rounded-lg bg-teal-500/10 text-teal-400 text-xs border border-teal-500/20 font-bold">
           {isAr ? '✓ تم الحضور' : '✓ Attended'}
@@ -202,12 +212,20 @@ export default function AppointmentsList() {
     }
   };
 
+  const showWhatsAppHub = clinicUser?.role !== 'accountant';
+  const showCancelledLog = clinicUser?.role !== 'user' && clinicUser?.role !== 'accountant';
+
+  const showConfirmBtn = (appt: PatientBooking) => appt.status === 'pending' && (!clinicUser || clinicUser.role !== 'accountant');
+  const showRescheduleBtn = (appt: PatientBooking) => !isAppointmentPast(appt.date, appt.timeSlot) && (!clinicUser || clinicUser.role !== 'accountant');
+  const showCancelBtn = (appt: PatientBooking) => !clinicUser || clinicUser.role === 'admin';
+  const showMarkAttendedBtn = (appt: PatientBooking) => appt.status === 'confirmed' && (!clinicUser || clinicUser.role === 'admin' || clinicUser.role === 'supervisor');
+
   return (
     <>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 text-right">
       
       {/* Dynamic Patient Bookings Tracker Table */}
-      <div className="lg:col-span-8 glass-panel rounded-3xl p-6 border border-teal-500/20 space-y-6">
+      <div className={showWhatsAppHub ? "lg:col-span-8 glass-panel rounded-3xl p-6 border border-teal-500/20 space-y-6" : "lg:col-span-12 glass-panel rounded-3xl p-6 border border-teal-500/20 space-y-6"}>
         <div>
           <h3 className="text-lg font-black text-white">
             {isAr ? 'الحجوزات النشطة وقائمة المرضى' : 'Active Appointments & Patient Ledger'}
@@ -219,7 +237,7 @@ export default function AppointmentsList() {
           </p>
         </div>
 
-        {activeBookings.length === 0 ? (
+        {filteredActiveBookings.length === 0 ? (
           <div className="text-center py-12 bg-slate-950/20 rounded-2xl border border-teal-950/40">
             <p className="text-slate-400 text-sm">
               {isAr ? 'لا توجد حجوزات مجدولة نشطة حالياً.' : 'No active bookings registered.'}
@@ -238,7 +256,7 @@ export default function AppointmentsList() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-teal-950/40 text-slate-200">
-                {activeBookings.map((appt) => (
+                {filteredActiveBookings.map((appt) => (
                   <tr key={appt.id} className="hover:bg-teal-950/10 transition-colors">
                     <td className="py-4">
                       <div className="font-bold text-white">{appt.patientName}</div>
@@ -251,7 +269,7 @@ export default function AppointmentsList() {
                     <td className="py-4">{getStatusBadge(appt)}</td>
                     <td className="py-4 text-left">
                       <div className="inline-flex gap-2">
-                        {appt.status === 'pending' && (
+                        {showConfirmBtn(appt) && (
                           <button
                             onClick={() => confirmAttendance(appt.id)}
                             className="px-3 py-1.5 rounded-lg bg-emerald-500 text-emerald-950 hover:bg-emerald-400 font-bold text-xs transition-colors"
@@ -259,7 +277,15 @@ export default function AppointmentsList() {
                             {isAr ? 'تأكيد الحضور' : 'Confirm'}
                           </button>
                         )}
-                        {!isAppointmentPast(appt.date, appt.timeSlot) && (
+                        {showMarkAttendedBtn(appt) && (
+                          <button
+                            onClick={() => markAttended(appt.id)}
+                            className="px-3 py-1.5 rounded-lg bg-emerald-500 text-emerald-950 hover:bg-emerald-400 font-bold text-xs transition-colors"
+                          >
+                            {isAr ? 'تسجيل حضور' : 'Mark Attended'}
+                          </button>
+                        )}
+                        {showRescheduleBtn(appt) && (
                           <button
                             onClick={() => handleOpenReschedule(appt)}
                             className="px-3 py-1.5 rounded-lg bg-teal-500/10 text-teal-400 border border-teal-950 hover:bg-[#0d2a2f] hover:text-teal-350 text-xs transition-colors font-semibold"
@@ -267,12 +293,14 @@ export default function AppointmentsList() {
                             {isAr ? 'نقل الموعد' : 'Reschedule'}
                           </button>
                         )}
-                        <button
-                          onClick={() => cancelAppointment(appt.id)}
-                          className="px-3 py-1.5 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-950 hover:bg-rose-950/40 text-xs transition-colors font-semibold"
-                        >
-                          {isAr ? 'إلغاء الموعد' : 'Cancel'}
-                        </button>
+                        {showCancelBtn(appt) && (
+                          <button
+                            onClick={() => cancelAppointment(appt.id)}
+                            className="px-3 py-1.5 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-950 hover:bg-rose-950/40 text-xs transition-colors font-semibold"
+                          >
+                            {isAr ? 'إلغاء الموعد' : 'Cancel'}
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -283,7 +311,7 @@ export default function AppointmentsList() {
         )}
 
         {/* Cancelled Log Teaser */}
-        {cancelledBookings.length > 0 && (
+        {showCancelledLog && cancelledBookings.length > 0 && (
           <div className="pt-4 border-t border-teal-950/40 space-y-2">
             <h4 className="text-xs font-bold text-slate-400">
               {isAr ? 'السجل التاريخي للإلغاءات الأخيرة' : 'Log of Recent Cancellations'}
@@ -303,68 +331,70 @@ export default function AppointmentsList() {
       </div>
 
       {/* WhatsApp Mock Messaging Logs Hub */}
-      <div className="lg:col-span-4 glass-panel rounded-3xl p-6 border border-teal-500/20 space-y-6">
-        <div>
-          <div className="flex items-center justify-between">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 glow-active" />
-            <h3 className="text-lg font-black text-white">
-              {isAr ? 'بوابة إشعارات الواتساب' : 'WhatsApp Notification Hub'}
-            </h3>
-          </div>
-          <p className="text-xs text-slate-400 mt-1">
-            {isAr 
-              ? 'مراقبة المسار الفوري للرسائل وتأكيدات المرضى التلقائية.' 
-              : 'Direct monitor of messaging pipeline & automated patient callbacks.'}
-          </p>
-        </div>
-
-        {/* Timeline Event Feed */}
-        <div className="space-y-4 max-h-[380px] overflow-y-auto custom-scrollbar pl-1">
-          {whatsappEvents.length === 0 ? (
-            <div className="text-center py-10 text-xs text-slate-500">
-              {isAr ? 'بانتظار حدوث عمليات حجز لبدء رصد الأحداث...' : 'Awaiting bookings to log webhook activity...'}
+      {showWhatsAppHub && (
+        <div className="lg:col-span-4 glass-panel rounded-3xl p-6 border border-teal-500/20 space-y-6">
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 glow-active" />
+              <h3 className="text-lg font-black text-white">
+                {isAr ? 'بوابة إشعارات الواتساب' : 'WhatsApp Notification Hub'}
+              </h3>
             </div>
-          ) : (
-            whatsappEvents.map((evt) => (
-              <div
-                key={evt.id}
-                className="p-3.5 rounded-2xl bg-[#09151e] border border-teal-950/50 space-y-2 text-right relative overflow-hidden animate-in slide-in-from-right-4 duration-300"
-              >
-                
-                {/* Event header */}
-                <div className="flex items-center justify-between text-[10px] text-slate-400">
-                  <span className="font-mono text-slate-500">{evt.timestamp}</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-bold text-teal-400">{evt.type}</span>
-                    <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />
-                  </div>
-                </div>
+            <p className="text-xs text-slate-400 mt-1">
+              {isAr 
+                ? 'مراقبة المسار الفوري للرسائل وتأكيدات المرضى التلقائية.' 
+                : 'Direct monitor of messaging pipeline & automated patient callbacks.'}
+            </p>
+          </div>
 
-                {/* Patient details */}
-                <div className="text-xs font-bold text-slate-200">
-                  {evt.patientName} ({evt.phone})
-                </div>
-
-                {/* Message Content Preview */}
-                <div className="p-2 rounded bg-slate-950/40 text-[10px] text-slate-400 border border-teal-950/20 leading-relaxed font-mono">
-                  "{evt.message}"
-                </div>
-
-                {/* Status Indicator */}
-                <div className="flex justify-between items-center text-[10px]">
-                  <span className="text-slate-500">Event ID: {evt.id.substring(3, 10)}</span>
-                  <div className="flex items-center gap-1">
-                    <span className="text-slate-400">{isAr ? 'الحالة:' : 'Status:'}</span>
-                    {getDeliveryStatusIcon(evt.status)}
-                  </div>
-                </div>
-
+          {/* Timeline Event Feed */}
+          <div className="space-y-4 max-h-[380px] overflow-y-auto custom-scrollbar pl-1">
+            {whatsappEvents.length === 0 ? (
+              <div className="text-center py-10 text-xs text-slate-500">
+                {isAr ? 'بانتظار حدوث عمليات حجز لبدء رصد الأحداث...' : 'Awaiting bookings to log webhook activity...'}
               </div>
-            ))
-          )}
-        </div>
+            ) : (
+              whatsappEvents.map((evt) => (
+                <div
+                  key={evt.id}
+                  className="p-3.5 rounded-2xl bg-[#09151e] border border-teal-950/50 space-y-2 text-right relative overflow-hidden animate-in slide-in-from-right-4 duration-300"
+                >
+                  
+                  {/* Event header */}
+                  <div className="flex items-center justify-between text-[10px] text-slate-400">
+                    <span className="font-mono text-slate-500">{evt.timestamp}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold text-teal-400">{evt.type}</span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />
+                    </div>
+                  </div>
 
-      </div>
+                  {/* Patient details */}
+                  <div className="text-xs font-bold text-slate-200">
+                    {evt.patientName} ({evt.phone})
+                  </div>
+
+                  {/* Message Content Preview */}
+                  <div className="p-2 rounded bg-slate-950/40 text-[10px] text-slate-400 border border-teal-950/20 leading-relaxed font-mono">
+                    "{evt.message}"
+                  </div>
+
+                  {/* Status Indicator */}
+                  <div className="flex justify-between items-center text-[10px]">
+                    <span className="text-slate-500">Event ID: {evt.id.substring(3, 10)}</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-slate-400">{isAr ? 'الحالة:' : 'Status:'}</span>
+                      {getDeliveryStatusIcon(evt.status)}
+                    </div>
+                  </div>
+
+                </div>
+              ))
+            )}
+          </div>
+
+        </div>
+      )}
     </div>
 
     {/* Reschedule Modal Overlay */}
