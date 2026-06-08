@@ -8,7 +8,7 @@ import DaySelector from '@/components/booking/DaySelector';
 import BookingGrid from '@/components/booking/BookingGrid';
 import BookingModal from '@/components/booking/BookingModal';
 import RescheduleAlert from '@/components/booking/RescheduleAlert';
-import { useBooking, PatientBooking, DEMO_FACILITIES } from '@/components/BookingContext';
+import { useBooking, PatientBooking, DEMO_FACILITIES, getActorArabicLabel } from '@/components/BookingContext';
 import { formatDateOnly } from '@/lib/dates';
 
 export default function DoctorPublicBookingPage() {
@@ -345,6 +345,15 @@ export default function DoctorPublicBookingPage() {
                     {lastCompletedBooking.facilityAddress && (
                       <span className="text-slate-400 block text-[11px] leading-relaxed">{lastCompletedBooking.facilityAddress}</span>
                     )}
+                  </div>
+                )}
+
+                {lastCompletedBooking.rescheduled_by && (
+                  <div className="pt-2.5 border-t border-teal-950/60 text-right space-y-1">
+                    <span className="text-[10px] text-slate-500 block">{isAr ? 'جهة التعديل:' : 'Modified By:'}</span>
+                    <span className="font-bold text-slate-200 block text-xs">
+                      {isAr ? getActorArabicLabel(lastCompletedBooking.rescheduled_by) : lastCompletedBooking.rescheduled_by}
+                    </span>
                   </div>
                 )}
 

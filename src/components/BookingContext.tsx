@@ -29,6 +29,31 @@ export interface PatientBooking {
   facilityName?: string;
   facilityMapUrl?: string;
   facilityAddress?: string;
+  cancelled_by?: string | null;
+  cancelled_at?: string | null;
+  rescheduled_by?: string | null;
+  rescheduled_at?: string | null;
+}
+
+export function getActorArabicLabel(actor: string | null | undefined): string {
+  if (!actor) return "بناءً على طلبك";
+  const lower = actor.toLowerCase();
+  if (lower === 'patient') return "بناءً على طلبك";
+  if (lower.includes('reception') || lower.includes('receptionist')) return "بواسطة موظف الاستقبال";
+  if (lower.includes('supervisor')) return "بواسطة المشرف";
+  if (lower.includes('admin')) return "بواسطة مدير النظام";
+  if (lower.includes('doctor')) return "بواسطة الطبيب";
+  return "بناءً على طلبك";
+}
+
+export function formatTimeHelper(timeStr: string, language: 'ar' | 'en' = 'ar'): string {
+  if (!timeStr || typeof timeStr !== 'string' || !timeStr.includes(':')) return '';
+  const [h, m] = timeStr.split(':');
+  const hr = parseInt(h);
+  if (isNaN(hr)) return '';
+  const suffix = language === 'ar' ? (hr >= 12 ? 'م' : 'ص') : (hr >= 12 ? 'PM' : 'AM');
+  const displayHr = hr > 12 ? hr - 12 : hr === 0 ? 12 : hr;
+  return `${displayHr}:${m} ${suffix}`;
 }
 
 export interface TimeSlot {
@@ -381,6 +406,10 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             status: appt.status as any,
             price: doctorProfile.consultationFee || 400,
             createdAt: appt.created_at,
+            cancelled_by: appt.cancelled_by,
+            cancelled_at: appt.cancelled_at,
+            rescheduled_by: appt.rescheduled_by,
+            rescheduled_at: appt.rescheduled_at,
           }));
           setBookings(mapped);
         }
@@ -644,6 +673,13 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         // Trigger WhatsApp webhook bridge for rescheduling
         try {
+          const actorVal = clinicUser ? `${clinicUser.full_name} (${clinicUser.role})` : 'patient';
+          const actorLabel = getActorArabicLabel(actorVal);
+          const formattedTime = formatTimeHelper(newTime, language);
+          const rescheduleMessage = actorLabel === "بناءً على طلبك"
+            ? `تم تعديل موعدك بناءً على طلبك.\nالموعد الجديد: ${newDate} - ${formattedTime}`
+            : `تم تعديل موعدك ${actorLabel}.\nالموعد الجديد: ${newDate} - ${formattedTime}`;
+
           const payload = {
             event_type: 'booking.rescheduled',
             data: {
@@ -661,7 +697,9 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
               booking_id: bookingId,
               rescheduled_by: rescheduledBy,
               performed_by_role: clinicUser ? clinicUser.role : 'patient',
-              performed_by_name: clinicUser ? clinicUser.full_name : bookingToMove.patientName
+              performed_by_name: clinicUser ? clinicUser.full_name : bookingToMove.patientName,
+              actor_label: actorLabel,
+              message: rescheduleMessage
             }
           };
 
@@ -705,7 +743,9 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       status: newStatus,
       facilityName: newFacilityName,
       facilityMapUrl: newFacilityMapUrl,
-      facilityAddress: language === 'ar' ? selectedFacility.address : selectedFacility.addressEn
+      facilityAddress: language === 'ar' ? selectedFacility.address : selectedFacility.addressEn,
+      rescheduled_by: clinicUser ? `${clinicUser.full_name} (${clinicUser.role})` : 'patient',
+      rescheduled_at: new Date().toISOString()
     };
     
     // Only update activeBooking localStorage if this was the active booking
@@ -801,6 +841,12 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const facility = DEMO_FACILITIES.find(f => f.id === data.facility_id) || DEMO_FACILITIES[0];
             const cancelledBy = clinicUser ? 'doctor' : 'patient';
 
+            const actorVal = data.cancelled_by || (clinicUser ? `${clinicUser.full_name} (${clinicUser.role})` : 'patient');
+            const actorLabel = getActorArabicLabel(actorVal);
+            const cancelMessage = actorLabel === "بناءً على طلبك"
+              ? "تم إلغاء موعدك بناءً على طلبك."
+              : `تم إلغاء موعدك ${actorLabel}.`;
+
             const payload = {
               event_type: 'booking.cancelled',
               data: {
@@ -814,9 +860,11 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 facility_address: language === 'ar' ? facility.address : facility.addressEn,
                 facility_map_url: facility.mapUrl,
                 booking_id: data.id,
-                cancelled_by: cancelledBy,
+                cancelled_by: data.cancelled_by || cancelledBy,
                 performed_by_role: clinicUser ? clinicUser.role : 'patient',
-                performed_by_name: clinicUser ? clinicUser.full_name : data.patient_name
+                performed_by_name: clinicUser ? clinicUser.full_name : data.patient_name,
+                actor_label: actorLabel,
+                message: cancelMessage
               }
             };
 
@@ -851,7 +899,12 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     // Update local state directly for immediate feedback
-    setBookings(prev => prev.map(b => (b.id === targetId || b.id === bookingId) ? { ...b, status: 'cancelled' as const } : b));
+    setBookings(prev => prev.map(b => (b.id === targetId || b.id === bookingId) ? { 
+      ...b, 
+      status: 'cancelled' as const,
+      cancelled_by: clinicUser ? `${clinicUser.full_name} (${clinicUser.role})` : 'patient',
+      cancelled_at: new Date().toISOString()
+    } : b));
 
     localStorage.removeItem('shifabook_active_booking_details');
     setActiveBooking(null);
@@ -1051,6 +1104,11 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           hour: '2-digit',
           minute: '2-digit'
         });
+        
+        const actor = b.rescheduled_by || 'patient';
+        const actorLabel = getActorArabicLabel(actor);
+        const formattedTime = formatTimeHelper(b.timeSlot);
+
         events.push({
           id: `wa-confirmed-${b.id}`,
           timestamp: confirmedTime,
@@ -1058,8 +1116,8 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           patientName: b.patientName,
           phone: b.mobileNumber,
           message: language === 'ar'
-            ? `مرحباً ${b.patientName} 👋\n\nتم نقل موعدك بنجاح في شفاء بوك.\n\n👨‍⚕️ الطبيب: ${docName}\n\nالموعد السابق:\n📅 ${b.date}\n⏰ ${formattedSlotTime}\n\nالموعد الجديد:\n📅 ${b.date}\n⏰ ${formattedSlotTime}\n\n📍 العيادة: ${b.facilityName || 'فرع المهندسين'}\nالعنوان: ${b.facilityAddress || ''}\n🗺️ اللوكيشن:\n${b.facilityMapUrl || ''}\n\nنتشرف بحضورك في الموعد الجديد.`
-            : `Hello ${b.patientName} 👋\n\nYour appointment has been successfully rescheduled at ShifaBook.\n\n👨‍⚕️ Doctor: ${docName}\n\nPrevious Slot:\n📅 ${b.date}\n⏰ ${formattedSlotTime}\n\nNew Slot:\n📅 ${b.date}\n⏰ ${formattedSlotTime}\n\n📍 Clinic: ${b.facilityName || ''}\nAddress: ${b.facilityAddress || ''}\n🗺️ Location Map:\n${b.facilityMapUrl || ''}\n\nLooking forward to seeing you at the new slot.`,
+            ? `مرحباً ${b.patientName} 👋\n\n${actorLabel === "بناءً على طلبك" ? "تم تعديل موعدك بناءً على طلبك." : `تم تعديل موعدك ${actorLabel}.`}\nالموعد الجديد: ${b.date} - ${formattedTime}\n\n👨‍⚕️ الطبيب: ${docName}\n📍 العيادة: ${b.facilityName || 'فرع المهندسين'}\nالعنوان: ${b.facilityAddress || ''}\n🗺️ اللوكيشن:\n${b.facilityMapUrl || ''}\n\nنتشرف بحضورك في الموعد الجديد.`
+            : `Hello ${b.patientName} 👋\n\nYour appointment has been successfully rescheduled at ShifaBook.\n\n👨‍⚕️ Doctor: ${docName}\nNew Slot:\n📅 ${b.date}\n⏰ ${formattedTime}\n\n📍 Clinic: ${b.facilityName || ''}\nAddress: ${b.facilityAddress || ''}\n🗺️ Location Map:\n${b.facilityMapUrl || ''}\n\nLooking forward to seeing you at the new slot.`,
           status: 'read'
         });
       }
@@ -1070,6 +1128,10 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           hour: '2-digit',
           minute: '2-digit'
         });
+        
+        const actor = b.cancelled_by || 'patient';
+        const actorLabel = getActorArabicLabel(actor);
+
         events.push({
           id: `wa-cancelled-${b.id}`,
           timestamp: cancelledTime,
@@ -1077,7 +1139,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           patientName: b.patientName,
           phone: b.mobileNumber,
           message: language === 'ar'
-            ? `مرحباً ${b.patientName} 👋\n\nتم إلغاء موعدك في شفاء بوك.\n\n👨‍⚕️ الطبيب: ${docName}\n📅 التاريخ: ${b.date}\n⏰ الوقت: ${formattedSlotTime}\n\n📍 العيادة: ${b.facilityName || 'فرع المهندسين'}\nالعنوان: ${b.facilityAddress || ''}\n\nيمكنك حجز موعد جديد في أي وقت من خلال صفحة الحجز.\n\nشكراً لاستخدامك شفاء بوك.`
+            ? `مرحباً ${b.patientName} 👋\n\n${actorLabel === "بناءً على طلبك" ? "تم إلغاء موعدك بناءً على طلبك." : `تم إلغاء موعدك ${actorLabel}.`}\n\n👨‍⚕️ الطبيب: ${docName}\n📅 التاريخ: ${b.date}\n⏰ الوقت: ${formattedSlotTime}\n\n📍 العيادة: ${b.facilityName || 'فرع المهندسين'}\nالعنوان: ${b.facilityAddress || ''}\n\nيمكنك حجز موعد جديد في أي وقت من خلال صفحة الحجز.\n\nشكراً لاستخدامك شفاء بوك.`
             : `Hello ${b.patientName} 👋\n\nYour appointment has been cancelled at ShifaBook.\n\n👨‍⚕️ Doctor: ${docName}\n📅 Date: ${b.date}\n⏰ Time: ${formattedSlotTime}\n\n📍 Clinic: ${b.facilityName || ''}\nAddress: ${b.facilityAddress || ''}\n\nYou can book a new slot anytime via the booking page.\n\nThank you for using ShifaBook.`,
           status: 'sent'
         });
@@ -1118,7 +1180,11 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           timeSlot: appt.appointment_time,
           status: appt.status as any,
           price: scheduleConfig.pricePerAppointment,
-          createdAt: appt.created_at
+          createdAt: appt.created_at,
+          cancelled_by: appt.cancelled_by,
+          cancelled_at: appt.cancelled_at,
+          rescheduled_by: appt.rescheduled_by,
+          rescheduled_at: appt.rescheduled_at
         };
         setActiveBooking(foundActive);
         saveActiveId(appt.id);

@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { useBooking } from '../BookingContext';
+import { useBooking, getActorArabicLabel } from '../BookingContext';
 
 interface RescheduleAlertProps {
   onTriggerReschedule: () => void;
@@ -65,6 +65,13 @@ export default function RescheduleAlert({ onTriggerReschedule, onClear, isResche
               </>
             )}
           </p>
+          {activeBooking.rescheduled_by && (
+            <p className="text-[10px] text-teal-400 font-bold">
+              {isAr 
+                ? `جهة التعديل: ${getActorArabicLabel(activeBooking.rescheduled_by)}`
+                : `Modified By: ${activeBooking.rescheduled_by}`}
+            </p>
+          )}
           <p className="text-[10px] text-slate-400">
             {isAr 
               ? 'توجيه: لنقل موعدك وتغييره، قم ببساطة باختيار أي مقعد/خانة زمنية شاغرة في الأسفل وسيقوم النظام بنقل حجزك تلقائياً.' 
