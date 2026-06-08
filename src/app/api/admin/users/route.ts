@@ -35,7 +35,9 @@ async function verifyAdminCaller() {
       return { error: 'غير مصرح لك بالدخول، يرجى مراجعة مدير النظام.', status: 403 };
     }
 
-    if (clinicUser.role !== 'admin' || !clinicUser.is_active) {
+    const role = clinicUser.role === 'user' ? 'reception' : clinicUser.role;
+
+    if (role !== 'admin' || !clinicUser.is_active) {
       return { error: 'عذراً، يجب أن تكون مديراً مسجلاً ونشطاً للقيام بهذا الإجراء.', status: 403 };
     }
 
@@ -60,7 +62,16 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return NextResponse.json(data);
+
+    // Backward compatibility: map 'user' to 'reception'
+    const normalized = (data || []).map((u: any) => {
+      if (u.role === 'user') {
+        return { ...u, role: 'reception' };
+      }
+      return u;
+    });
+
+    return NextResponse.json(normalized);
   } catch (err: any) {
     console.error('Error fetching clinic users:', err);
     // Graceful fallback if relation does not exist
@@ -122,7 +133,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 3. Insert into clinic_users
-    const { error: dbError } = await supabaseAdmin
+    let { error: dbError } = await supabaseAdmin
       .from('clinic_users')
       .insert({
         email,
@@ -132,6 +143,22 @@ export async function POST(request: NextRequest) {
         auth_user_id: userId,
         created_by: caller.id
       });
+
+    // Check constraint fallback for un-migrated role databases
+    if (dbError && dbError.code === '23514' && role === 'reception') {
+      console.warn("Check constraint rejected 'reception', retrying insertion with role 'user' for fallback.");
+      const retryResult = await supabaseAdmin
+        .from('clinic_users')
+        .insert({
+          email,
+          full_name,
+          role: 'user',
+          is_active: is_active ?? true,
+          auth_user_id: userId,
+          created_by: caller.id
+        });
+      dbError = retryResult.error;
+    }
 
     if (dbError) {
       console.error('Database insertion error for clinic user:', dbError);
@@ -180,7 +207,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // 1. Update clinic_users
-    const { error: dbError } = await supabaseAdmin
+    let { error: dbError } = await supabaseAdmin
       .from('clinic_users')
       .update({
         role,
@@ -188,6 +215,20 @@ export async function PUT(request: NextRequest) {
         updated_at: new Date().toISOString()
       })
       .eq('id', id);
+
+    // Check constraint fallback for un-migrated role databases
+    if (dbError && dbError.code === '23514' && role === 'reception') {
+      console.warn("Check constraint rejected 'reception', retrying update with role 'user' for fallback.");
+      const retryResult = await supabaseAdmin
+        .from('clinic_users')
+        .update({
+          role: 'user',
+          is_active,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id);
+      dbError = retryResult.error;
+    }
 
     if (dbError) {
       console.error('Database update error for clinic user:', dbError);

@@ -53,7 +53,7 @@ export interface ClinicUser {
   id: string;
   email: string;
   full_name: string;
-  role: 'admin' | 'supervisor' | 'user' | 'accountant';
+  role: 'admin' | 'supervisor' | 'reception' | 'accountant';
   is_active: boolean;
   auth_user_id: string;
   created_at: string;
@@ -166,7 +166,11 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             .single();
 
           if (!userError && clinicUserData) {
-            setClinicUser(clinicUserData);
+            const normalized = { ...clinicUserData };
+            if (normalized.role === 'user') {
+              normalized.role = 'reception';
+            }
+            setClinicUser(normalized);
           } else {
             // Seeded doctor or default fallback
             setClinicUser({
@@ -881,7 +885,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const markAttended = async (bookingId: string) => {
-    if (clinicUser && !['admin', 'supervisor'].includes(clinicUser.role)) {
+    if (clinicUser && !['admin', 'supervisor', 'reception'].includes(clinicUser.role)) {
       const errorMsg = language === 'ar' ? "ليس لديك صلاحية لتنفيذ هذا الإجراء." : "You do not have permission to perform this action.";
       if (typeof window !== 'undefined') window.alert(errorMsg);
       throw new Error(errorMsg);

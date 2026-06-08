@@ -10,7 +10,8 @@ export default function PatientCRM() {
     fetchPatients, 
     fetchNotesForPatient, 
     addPatientNote, 
-    updatePatientProfile 
+    updatePatientProfile,
+    clinicUser
   } = useBooking();
 
   const isAr = language === 'ar';
@@ -229,12 +230,14 @@ export default function PatientCRM() {
                   <span>{isAr ? 'فصيلة الدم:' : 'Blood Group:'} <strong className="text-teal-400">{selectedPatient.blood_type || 'A+'}</strong></span>
                 </p>
               </div>
-              <button
-                onClick={() => setIsEditing(!isEditing)}
-                className="px-3.5 py-1.5 rounded-xl border border-teal-500/35 bg-teal-500/10 text-teal-400 text-xs font-bold hover:bg-teal-500/20 transition-all"
-              >
-                {isEditing ? (isAr ? 'إلغاء التعديل' : 'Cancel') : (isAr ? 'تعديل الملف الطبي' : 'Edit Profile')}
-              </button>
+              {['admin', 'supervisor', 'reception', 'user'].includes(clinicUser?.role || '') && (
+                <button
+                  onClick={() => setIsEditing(!isEditing)}
+                  className="px-3.5 py-1.5 rounded-xl border border-teal-500/35 bg-teal-500/10 text-teal-400 text-xs font-bold hover:bg-teal-500/20 transition-all"
+                >
+                  {isEditing ? (isAr ? 'إلغاء التعديل' : 'Cancel') : (isAr ? 'تعديل الملف الطبي' : 'Edit Profile')}
+                </button>
+              )}
             </div>
 
             {/* Profile Editing Form View */}
@@ -412,40 +415,48 @@ export default function PatientCRM() {
               </h4>
 
               {/* Add Clinical Note Form */}
-              <form onSubmit={handleAddNote} className="space-y-3 bg-[#09151e] border border-teal-950 p-4 rounded-2xl">
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <div className="flex-grow">
-                    <input
-                      type="text"
-                      placeholder={isAr ? 'اكتب الأعراض، التشخيص، أو الخطة العلاجية للمريض...' : 'Write symptoms, diagnoses, or clinical plans...'}
-                      value={newNote}
-                      onChange={(e) => setNewNote(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl bg-slate-950/80 border border-teal-950 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-teal-500 text-xs transition-colors"
-                    />
+              {['admin', 'supervisor'].includes(clinicUser?.role || '') ? (
+                <form onSubmit={handleAddNote} className="space-y-3 bg-[#09151e] border border-teal-950 p-4 rounded-2xl">
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <div className="flex-grow">
+                      <input
+                        type="text"
+                        placeholder={isAr ? 'اكتب الأعراض، التشخيص، أو الخطة العلاجية للمريض...' : 'Write symptoms, diagnoses, or clinical plans...'}
+                        value={newNote}
+                        onChange={(e) => setNewNote(e.target.value)}
+                        className="w-full px-4 py-3 rounded-xl bg-slate-950/80 border border-teal-950 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-teal-500 text-xs transition-colors"
+                      />
+                    </div>
+                    <div className="flex gap-2 sm:w-64 flex-shrink-0">
+                      <select
+                        value={noteType}
+                        onChange={(e) => setNoteType(e.target.value)}
+                        className="w-full bg-slate-950 border border-teal-950 text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-teal-500 cursor-pointer"
+                      >
+                        <option value="كشف دوري">{isAr ? 'كشف دوري' : 'Consultation'}</option>
+                        <option value="متابعة ضغط">{isAr ? 'متابعة ضغط' : 'Hypertension Check'}</option>
+                        <option value="قسطرة قلبية">{isAr ? 'قسطرة قلبية' : 'Catheterization'}</option>
+                        <option value="تعديل دواء">{isAr ? 'تعديل دواء' : 'Medication Adjust'}</option>
+                        <option value="طوارئ">{isAr ? 'حالة طارئة' : 'Emergency'}</option>
+                      </select>
+                      
+                      <button
+                        type="submit"
+                        disabled={!newNote.trim()}
+                        className="px-4 py-2 bg-teal-500 text-[#070e12] font-black text-xs rounded-xl hover:bg-teal-400 transition-colors disabled:opacity-50"
+                      >
+                        {isAr ? 'إضافة ✍️' : 'Add Note'}
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex gap-2 sm:w-64 flex-shrink-0">
-                    <select
-                      value={noteType}
-                      onChange={(e) => setNoteType(e.target.value)}
-                      className="w-full bg-slate-950 border border-teal-950 text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-teal-500 cursor-pointer"
-                    >
-                      <option value="كشف دوري">{isAr ? 'كشف دوري' : 'Consultation'}</option>
-                      <option value="متابعة ضغط">{isAr ? 'متابعة ضغط' : 'Hypertension Check'}</option>
-                      <option value="قسطرة قلبية">{isAr ? 'قسطرة قلبية' : 'Catheterization'}</option>
-                      <option value="تعديل دواء">{isAr ? 'تعديل دواء' : 'Medication Adjust'}</option>
-                      <option value="طوارئ">{isAr ? 'حالة طارئة' : 'Emergency'}</option>
-                    </select>
-                    
-                    <button
-                      type="submit"
-                      disabled={!newNote.trim()}
-                      className="px-4 py-2 bg-teal-500 text-[#070e12] font-black text-xs rounded-xl hover:bg-teal-400 transition-colors disabled:opacity-50"
-                    >
-                      {isAr ? 'إضافة ✍️' : 'Add Note'}
-                    </button>
-                  </div>
+                </form>
+              ) : (
+                <div className="p-4 rounded-2xl bg-slate-950/40 border border-teal-950/50 text-center text-xs text-slate-400">
+                  {isAr 
+                    ? 'إضافة الملاحظات الطبية والتشخيصية مخصصة للأطباء والمشرفين فقط.' 
+                    : 'Adding medical notes and diagnoses is restricted to doctors and supervisors only.'}
                 </div>
-              </form>
+              )}
 
               {/* Notes Timeline List */}
               <div className="space-y-3 max-h-[220px] overflow-y-auto custom-scrollbar pl-1">

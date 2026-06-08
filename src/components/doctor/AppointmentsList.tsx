@@ -213,12 +213,12 @@ export default function AppointmentsList() {
   };
 
   const showWhatsAppHub = clinicUser?.role !== 'accountant';
-  const showCancelledLog = clinicUser?.role !== 'user' && clinicUser?.role !== 'accountant';
+  const showCancelledLog = clinicUser?.role !== 'reception' && clinicUser?.role !== 'accountant';
 
   const showConfirmBtn = (appt: PatientBooking) => appt.status === 'pending' && (!clinicUser || clinicUser.role !== 'accountant');
   const showRescheduleBtn = (appt: PatientBooking) => !isAppointmentPast(appt.date, appt.timeSlot) && (!clinicUser || clinicUser.role !== 'accountant');
   const showCancelBtn = (appt: PatientBooking) => !clinicUser || clinicUser.role === 'admin';
-  const showMarkAttendedBtn = (appt: PatientBooking) => appt.status === 'confirmed' && (!clinicUser || clinicUser.role === 'admin' || clinicUser.role === 'supervisor');
+  const showMarkAttendedBtn = (appt: PatientBooking) => appt.status === 'confirmed' && (!clinicUser || clinicUser.role === 'admin' || clinicUser.role === 'supervisor' || clinicUser.role === 'reception');
 
   return (
     <>

@@ -7,7 +7,7 @@ interface User {
   id: string;
   email: string;
   full_name: string;
-  role: 'admin' | 'supervisor' | 'user' | 'accountant';
+  role: 'admin' | 'supervisor' | 'reception' | 'accountant';
   is_active: boolean;
   auth_user_id: string;
   created_at: string;
@@ -24,7 +24,7 @@ export default function UserManagement() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'admin' | 'supervisor' | 'user' | 'accountant'>('user');
+  const [role, setRole] = useState<'admin' | 'supervisor' | 'reception' | 'accountant'>('reception');
   const [isActive, setIsActive] = useState(true);
   const [formLoading, setFormLoading] = useState(false);
 
@@ -95,7 +95,7 @@ export default function UserManagement() {
         setFullName('');
         setEmail('');
         setPassword('');
-        setRole('user');
+        setRole('reception');
         setIsActive(true);
         // Refresh list
         fetchUsers();
@@ -174,8 +174,9 @@ export default function UserManagement() {
         return <span className="px-2. py-0.5 rounded-md bg-purple-500/10 text-purple-400 text-[10px] font-bold border border-purple-500/20">{isAr ? 'مدير' : 'Admin'}</span>;
       case 'supervisor':
         return <span className="px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-400 text-[10px] font-bold border border-blue-500/20">{isAr ? 'مشرف' : 'Supervisor'}</span>;
+      case 'reception':
       case 'user':
-        return <span className="px-2 py-0.5 rounded-md bg-teal-500/10 text-teal-400 text-[10px] font-bold border border-teal-500/20">{isAr ? 'موظف استقبال' : 'User/Reception'}</span>;
+        return <span className="px-2 py-0.5 rounded-md bg-teal-500/10 text-teal-400 text-[10px] font-bold border border-teal-500/20">{isAr ? 'استقبال' : 'Reception'}</span>;
       case 'accountant':
         return <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400 text-[10px] font-bold border border-amber-500/20">{isAr ? 'محاسب' : 'Accountant'}</span>;
       default:
@@ -230,7 +231,7 @@ export default function UserManagement() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="user@shifabook.com"
+              placeholder="reception@shifabook.com"
               className="w-full px-4 py-3 rounded-xl bg-[#09151e] border border-teal-950/60 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-teal-500 text-sm transition-colors text-left"
             />
           </div>
@@ -260,7 +261,7 @@ export default function UserManagement() {
             >
               <option value="admin">{isAr ? 'مدير (Admin)' : 'Admin'}</option>
               <option value="supervisor">{isAr ? 'مشرف (Supervisor)' : 'Supervisor'}</option>
-              <option value="user">{isAr ? 'موظف استقبال (User)' : 'User/Reception'}</option>
+              <option value="reception">{isAr ? 'موظف استقبال (Reception)' : 'Reception'}</option>
               <option value="accountant">{isAr ? 'محاسب (Accountant)' : 'Accountant'}</option>
             </select>
           </div>
@@ -350,7 +351,7 @@ export default function UserManagement() {
                         >
                           <option value="admin">{isAr ? 'مدير' : 'Admin'}</option>
                           <option value="supervisor">{isAr ? 'مشرف' : 'Supervisor'}</option>
-                          <option value="user">{isAr ? 'موظف استقبال' : 'User'}</option>
+                          <option value="reception">{isAr ? 'موظف استقبال' : 'Reception'}</option>
                           <option value="accountant">{isAr ? 'محاسب' : 'Accountant'}</option>
                         </select>
                       </td>

@@ -10,6 +10,7 @@ import AppointmentsList from '@/components/doctor/AppointmentsList';
 import ProfileSettings from '@/components/doctor/ProfileSettings';
 import PatientCRM from '@/components/doctor/PatientCRM';
 import UserManagement from '@/components/doctor/UserManagement';
+import FinanceModule from '@/components/doctor/FinanceModule';
 import { useBooking } from '@/components/BookingContext';
 import { createClient } from '@/lib/supabase/client';
 import { SupabaseDoctor, SupabaseAppointment } from './page';
@@ -21,7 +22,7 @@ interface DoctorDashboardClientProps {
 
 export default function DoctorDashboardClient({ doctor, initialAppointments }: DoctorDashboardClientProps) {
   const { language, doctorProfile, setBookings, setIsLoadingAvailability, clinicUser } = useBooking();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'crm' | 'users'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'crm' | 'users' | 'finance'>('dashboard');
   const isAr = language === 'ar';
   const router = useRouter();
   const supabase = createClient();
@@ -49,6 +50,9 @@ export default function DoctorDashboardClient({ doctor, initialAppointments }: D
     if (activeTab === 'crm' && clinicUser?.role === 'accountant') {
       setActiveTab('dashboard');
     }
+    if (activeTab === 'finance' && !['admin', 'accountant'].includes(clinicUser?.role || '')) {
+      setActiveTab('dashboard');
+    }
   }, [activeTab, clinicUser]);
 
   const handleLogout = async () => {
@@ -58,7 +62,7 @@ export default function DoctorDashboardClient({ doctor, initialAppointments }: D
   };
 
   // UI elements visibility checks based on roles
-  const showStats = clinicUser?.role !== 'user';
+  const showStats = clinicUser?.role !== 'reception';
   const showSchedule = clinicUser?.role === 'admin' || clinicUser?.role === 'supervisor';
   const showProfileSettings = clinicUser?.role === 'admin';
   const showSidebar = showSchedule || showProfileSettings;
@@ -68,7 +72,9 @@ export default function DoctorDashboardClient({ doctor, initialAppointments }: D
     switch (role) {
       case 'admin': return isAr ? 'مدير النظام' : 'Admin';
       case 'supervisor': return isAr ? 'مشرف العيادة' : 'Supervisor';
-      case 'user': return isAr ? 'موظف استقبال' : 'Receptionist';
+      case 'reception':
+      case 'user': 
+        return isAr ? 'استقبال' : 'Reception';
       case 'accountant': return isAr ? 'المحاسب المالي' : 'Accountant';
       default: return role;
     }
@@ -176,6 +182,18 @@ export default function DoctorDashboardClient({ doctor, initialAppointments }: D
                 {isAr ? 'إدارة المستخدمين' : 'User Management'}
               </button>
             )}
+            {(clinicUser?.role === 'admin' || clinicUser?.role === 'accountant') && (
+              <button
+                onClick={() => setActiveTab('finance')}
+                className={`pb-3 text-sm font-black border-b-2 transition-all duration-200 ${
+                  activeTab === 'finance'
+                    ? 'border-teal-500 text-teal-400 font-extrabold'
+                    : 'border-transparent text-slate-400 hover:text-white'
+                }`}
+              >
+                {isAr ? 'الإدارة المالية' : 'Finance'}
+              </button>
+            )}
           </div>
 
           {activeTab === 'dashboard' && (
@@ -209,6 +227,10 @@ export default function DoctorDashboardClient({ doctor, initialAppointments }: D
 
           {activeTab === 'users' && clinicUser?.role === 'admin' && (
             <UserManagement />
+          )}
+
+          {activeTab === 'finance' && (clinicUser?.role === 'admin' || clinicUser?.role === 'accountant') && (
+            <FinanceModule />
           )}
 
         </div>
