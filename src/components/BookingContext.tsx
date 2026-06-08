@@ -622,7 +622,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         if (error) {
           // Graceful fallback for missing columns
-          if (error.code === '42703') {
+          if (error.code === '42703' || error.code === 'PGRST204' || error.message?.includes('schema cache')) {
             const fallbackResult = await supabase
               .from('appointments')
               .update({
@@ -751,7 +751,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           .single();
 
         if (error) {
-          if (error.code === '42703') {
+          if (error.code === '42703' || error.code === 'PGRST204' || error.message?.includes('schema cache')) {
             const fallbackResult = await supabase
               .from('appointments')
               .update({ status: 'cancelled' })
@@ -861,7 +861,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           .eq('id', bookingId);
 
         if (error) {
-          if (error.code === '42703') {
+          if (error.code === '42703' || error.code === 'PGRST204' || error.message?.includes('schema cache')) {
             await supabase
               .from('appointments')
               .update({ status: 'confirmed' })
@@ -910,7 +910,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           .eq('id', bookingId);
 
         if (error) {
-          if (error.code === '42703') {
+          if (error.code === '42703' || error.code === 'PGRST204' || error.message?.includes('schema cache')) {
             await supabase
               .from('appointments')
               .update({ status: 'attended' })
