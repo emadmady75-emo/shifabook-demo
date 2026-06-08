@@ -82,15 +82,27 @@ export default function FinanceModule() {
       const res = await fetch('/api/admin/finance');
       const data = await res.json();
 
-      if (data.code === 'MIGRATION_PENDING') {
+      const isPending = 
+        data.code === 'MIGRATION_PENDING' || 
+        (data.error && (
+          data.error.includes('relation') || 
+          data.error.includes('schema cache') || 
+          data.error.includes('payments') || 
+          data.error.includes('invoices') || 
+          data.error.includes('expenses')
+        ));
+
+      if (isPending) {
         setIsMigrationPending(true);
-        setErrorMsg(data.error);
+        setErrorMsg(data.error || 'لم يتم تفعيل وحدة الإدارة المالية بعد.');
         setIsLoading(false);
         return;
       }
 
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to fetch finance data');
+        setErrorMsg(data.error || 'Failed to fetch finance data');
+        setIsLoading(false);
+        return;
       }
 
       setAppointments(data.appointments || []);
@@ -99,8 +111,9 @@ export default function FinanceModule() {
       setExpenses(data.expenses || []);
       setDoctorLookup(data.doctorLookup || {});
     } catch (err: any) {
-      console.error(err);
-      setErrorMsg(isAr ? 'حدث خطأ أثناء تحميل البيانات المالية.' : 'Error loading financial data.');
+      console.error('Graceful error load:', err);
+      setIsMigrationPending(true);
+      setErrorMsg(isAr ? 'لم يتم تفعيل وحدة الإدارة المالية بعد.' : 'Finance module is not active yet.');
     } finally {
       setIsLoading(false);
     }
@@ -260,9 +273,9 @@ export default function FinanceModule() {
           </svg>
         </div>
         <div className="space-y-2">
-          <h3 className="text-xl font-black text-white">لم يتم تفعيل وحدة الإدارة المالية بعد</h3>
-          <p className="text-xs text-slate-400 leading-relaxed">
-            يرجى تشغيل ملف هجرة قواعد البيانات المالي <code className="text-teal-400 font-mono">migration_finance.sql</code> في لوحة Supabase SQL Editor أولاً لتفعيل الجداول والصلاحيات الخاصة بالمدفوعات والمصروفات.
+          <h3 className="text-xl font-black text-white">وحدة الإدارة المالية لم يتم تفعيلها بعد</h3>
+          <p className="text-sm text-slate-300 leading-relaxed">
+            يرجى تشغيل Migration المالية لاحقًا لتفعيل المدفوعات والفواتير والمصروفات.
           </p>
         </div>
       </div>

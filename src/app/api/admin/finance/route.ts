@@ -110,7 +110,15 @@ export async function GET(request: NextRequest) {
     });
   } catch (err: any) {
     console.error('Finance GET error:', err);
-    if (err.code === '42P01' || err.message?.includes('relation') && err.message?.includes('does not exist')) {
+    const isMissingTable = 
+      err.code === '42P01' || 
+      err.code === 'PGRST204' || 
+      err.code === 'PGRST205' || 
+      err.message?.includes('relation') ||
+      err.message?.includes('schema cache') ||
+      err.message?.includes('does not exist');
+
+    if (isMissingTable) {
       return NextResponse.json({ 
         code: 'MIGRATION_PENDING', 
         error: 'لم يتم تفعيل وحدة الإدارة المالية بعد. يرجى تشغيل ملف الهجرة.' 
@@ -259,7 +267,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'نوع الإجراء غير صالح.' }, { status: 400 });
   } catch (err: any) {
     console.error('Finance POST error:', err);
-    if (err.code === '42P01' || err.message?.includes('relation') && err.message?.includes('does not exist')) {
+    const isMissingTable = 
+      err.code === '42P01' || 
+      err.code === 'PGRST204' || 
+      err.code === 'PGRST205' || 
+      err.message?.includes('relation') ||
+      err.message?.includes('schema cache') ||
+      err.message?.includes('does not exist');
+
+    if (isMissingTable) {
       return NextResponse.json({ 
         code: 'MIGRATION_PENDING', 
         error: 'لم يتم تفعيل وحدة الإدارة المالية بعد. يرجى تشغيل ملف الهجرة.' 
