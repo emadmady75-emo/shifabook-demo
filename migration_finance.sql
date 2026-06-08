@@ -79,3 +79,11 @@ CREATE POLICY "Allow authenticated read invoices" ON invoices
 DROP POLICY IF EXISTS "Allow authenticated read expenses" ON expenses;
 CREATE POLICY "Allow authenticated read expenses" ON expenses
     FOR SELECT TO authenticated USING (true);
+
+-- 8. Add password_reset_required column to clinic_users
+ALTER TABLE clinic_users ADD COLUMN IF NOT EXISTS password_reset_required BOOLEAN NOT NULL DEFAULT false;
+
+-- 9. Add UPDATE RLS policy for clinic_users so users can clear their password reset flag
+DROP POLICY IF EXISTS "Allow users to update their own profile" ON clinic_users;
+CREATE POLICY "Allow users to update their own profile" ON clinic_users
+    FOR UPDATE TO authenticated USING (auth_user_id = auth.uid()) WITH CHECK (auth_user_id = auth.uid());

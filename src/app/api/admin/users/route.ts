@@ -141,7 +141,8 @@ export async function POST(request: NextRequest) {
         role,
         is_active: is_active ?? true,
         auth_user_id: userId,
-        created_by: caller.id
+        created_by: caller.id,
+        password_reset_required: true
       });
 
     // Check constraint fallback for un-migrated role databases
@@ -155,7 +156,8 @@ export async function POST(request: NextRequest) {
           role: 'user',
           is_active: is_active ?? true,
           auth_user_id: userId,
-          created_by: caller.id
+          created_by: caller.id,
+          password_reset_required: true
         });
       dbError = retryResult.error;
     }

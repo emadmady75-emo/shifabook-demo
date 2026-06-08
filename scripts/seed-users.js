@@ -38,7 +38,14 @@ if (!supabaseUrl || !serviceRoleKey) {
 
 const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
-const DEFAULT_PASSWORD = 'ShifaBook2026_test!';
+const crypto = require('crypto');
+
+function generateRandomPassword() {
+  const randomStr = crypto.randomBytes(9).toString('base64')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .substring(0, 10);
+  return `${randomStr}Aa1!`;
+}
 
 const TEST_USERS = [
   { email: 'admin@test.com', full_name: 'مدير النظام التجريبي', role: 'admin' },
@@ -57,7 +64,10 @@ async function seed() {
     return;
   }
 
+  const generatedCredentials = [];
+
   for (const user of TEST_USERS) {
+    const tempPassword = generateRandomPassword();
     console.log(`Processing user: ${user.email} (${user.role})...`);
 
     // Check if user already exists in clinic_users
@@ -70,14 +80,15 @@ async function seed() {
     if (existingProfile && existingProfile.length > 0) {
       console.log(`- Profile already exists for ${user.email}. Skipping Auth creation.`);
       
-      // Update role if changed
-      if (existingProfile[0].role !== user.role) {
-        await supabaseAdmin
-          .from('clinic_users')
-          .update({ role: user.role })
-          .eq('email', user.email);
-        console.log(`- Updated role to ${user.role}.`);
-      }
+      // Update role and password reset flag
+      await supabaseAdmin
+        .from('clinic_users')
+        .update({ 
+          role: user.role,
+          password_reset_required: true
+        })
+        .eq('email', user.email);
+      console.log(`- Updated role to ${user.role} and set password_reset_required to true.`);
       continue;
     }
 
@@ -95,7 +106,7 @@ async function seed() {
     if (!authUser) {
       const { data: newAuthUser, error: createErr } = await supabaseAdmin.auth.admin.createUser({
         email: user.email,
-        password: DEFAULT_PASSWORD,
+        password: tempPassword,
         email_confirm: true,
         user_metadata: { full_name: user.full_name }
       });
@@ -109,6 +120,15 @@ async function seed() {
       console.log(`- Created new Auth user with ID: ${userId}`);
     } else {
       console.log(`- Auth user already exists with ID: ${userId}`);
+      // If user exists, reset password to random
+      const { error: resetPassErr } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+        password: tempPassword
+      });
+      if (resetPassErr) {
+        console.error(`- Error resetting auth password for existing user:`, resetPassErr.message);
+      } else {
+        console.log(`- Reset existing auth password to a new random temporary credential.`);
+      }
     }
 
     // Insert into clinic_users
@@ -119,7 +139,8 @@ async function seed() {
         full_name: user.full_name,
         role: user.role,
         is_active: true,
-        auth_user_id: userId
+        auth_user_id: userId,
+        password_reset_required: true
       });
 
     if (insertErr) {
@@ -127,12 +148,17 @@ async function seed() {
     } else {
       console.log(`- Profile linked successfully!`);
     }
+
+    generatedCredentials.push({ email: user.email, password: tempPassword, role: user.role });
   }
 
-  console.log("\nSeeding finished! Credentials for testing:");
-  TEST_USERS.forEach(u => {
-    console.log(`- Email: ${u.email} | Password: ${DEFAULT_PASSWORD} | Role: ${u.role}`);
+  console.log("\n=======================================================");
+  console.log("Seeding finished! Secure temporary credentials generated:");
+  generatedCredentials.forEach(u => {
+    console.log(`- Email: ${u.email} | Temporary Password: ${u.password} | Role: ${u.role}`);
   });
+  console.log("=======================================================");
+  console.log("Note: On first login, users will be prompted to reset this password.");
 }
 
 seed();

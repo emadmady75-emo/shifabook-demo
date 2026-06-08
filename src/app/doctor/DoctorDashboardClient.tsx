@@ -21,11 +21,69 @@ interface DoctorDashboardClientProps {
 }
 
 export default function DoctorDashboardClient({ doctor, initialAppointments }: DoctorDashboardClientProps) {
-  const { language, doctorProfile, setBookings, setIsLoadingAvailability, clinicUser } = useBooking();
+  const { language, doctorProfile, setBookings, setIsLoadingAvailability, clinicUser, refreshProfile } = useBooking();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'crm' | 'users' | 'finance'>('dashboard');
   const isAr = language === 'ar';
   const router = useRouter();
   const supabase = createClient();
+
+  // Forced password reset states
+  const [localResetRequired, setLocalResetRequired] = useState(false);
+  const [resetPassword, setResetPassword] = useState('');
+  const [confirmResetPassword, setConfirmResetPassword] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetError, setResetError] = useState('');
+  const [resetSuccess, setResetSuccess] = useState(false);
+
+  useEffect(() => {
+    if (clinicUser?.password_reset_required) {
+      setLocalResetRequired(true);
+    } else {
+      setLocalResetRequired(false);
+    }
+  }, [clinicUser]);
+
+  const handleForcePasswordResetSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!clinicUser) return;
+    
+    setResetError('');
+    if (resetPassword.length < 8) {
+      setResetError(isAr ? 'يجب أن تتكون كلمة المرور من 8 أحرف على الأقل' : 'Password must be at least 8 characters long');
+      return;
+    }
+    if (resetPassword !== confirmResetPassword) {
+      setResetError(isAr ? 'كلمتا المرور غير متطابقتين' : 'Passwords do not match');
+      return;
+    }
+
+    setResetLoading(true);
+    try {
+      const { error: authErr } = await supabase.auth.updateUser({ password: resetPassword });
+      if (authErr) throw authErr;
+
+      const { error: dbErr } = await supabase
+        .from('clinic_users')
+        .update({ password_reset_required: false })
+        .eq('auth_user_id', clinicUser.auth_user_id);
+
+      if (dbErr) {
+        console.warn("DB update for password_reset_required failed:", dbErr);
+      }
+
+      setResetSuccess(true);
+      setLocalResetRequired(false);
+      
+      if (refreshProfile) {
+        await refreshProfile();
+      }
+    } catch (err: any) {
+      console.error('Forced password reset error:', err);
+      setResetError(err.message || (isAr ? 'حدث خطأ أثناء تغيير كلمة المرور.' : 'Error changing password.'));
+    } finally {
+      setResetLoading(false);
+    }
+  };
 
   useEffect(() => {
     const mapped = initialAppointments.map(appt => ({
@@ -237,6 +295,75 @@ export default function DoctorDashboardClient({ doctor, initialAppointments }: D
       </main>
 
       <Footer />
+
+      {localResetRequired && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#04080b]/98 backdrop-blur-lg" dir="rtl">
+          <div className="w-full max-w-md glass-panel rounded-3xl p-8 border border-teal-500/30 text-right space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-14 h-14 rounded-2xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400 mx-auto mb-2">
+              <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+              </svg>
+            </div>
+            
+            <div className="text-center space-y-2">
+              <h3 className="text-xl font-black text-white">
+                {isAr ? 'تأمين الحساب وإعادة تعيين كلمة المرور' : 'Secure Account & Reset Password'}
+              </h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                {isAr 
+                  ? 'تم تسجيل دخولك بنجاح باستخدام كلمة مرور مؤقتة. لحماية خصوصية بيانات المرضى، يرجى تعيين كلمة مرور جديدة قوية لحسابك الآن.'
+                  : 'You have logged in using a temporary password. To protect patient data privacy, please set a strong new password for your account.'}
+              </p>
+            </div>
+
+            {resetError && (
+              <div className="p-3.5 rounded-xl border border-rose-500/25 bg-rose-500/10 text-rose-400 text-xs font-bold text-center">
+                ⚠️ {resetError}
+              </div>
+            )}
+
+            <form onSubmit={handleForcePasswordResetSubmit} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-300 block">
+                  {isAr ? 'كلمة المرور الجديدة' : 'New Password'}
+                </label>
+                <input
+                  type="password"
+                  required
+                  minLength={8}
+                  value={resetPassword}
+                  onChange={(e) => setResetPassword(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-[#09151e] border border-teal-950/60 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-teal-500 text-sm transition-colors text-right"
+                  placeholder={isAr ? '8 أحرف على الأقل' : 'At least 8 characters'}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-300 block">
+                  {isAr ? 'تأكيد كلمة المرور' : 'Confirm Password'}
+                </label>
+                <input
+                  type="password"
+                  required
+                  minLength={8}
+                  value={confirmResetPassword}
+                  onChange={(e) => setConfirmResetPassword(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-[#09151e] border border-teal-950/60 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-teal-500 text-sm transition-colors text-right"
+                  placeholder={isAr ? 'أعد كتابة كلمة المرور' : 'Retype password'}
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={resetLoading}
+                className="w-full py-3.5 rounded-xl bg-gradient-to-tr from-teal-500 to-emerald-400 text-[#070e12] font-black text-sm hover:scale-[1.01] active:scale-[0.99] transition-all shadow-md shadow-teal-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {resetLoading ? (isAr ? 'جاري التحديث وتأمين الحساب...' : 'Updating & securing...') : (isAr ? 'حفظ كلمة المرور والدخول للوحة التحكم' : 'Save Password & Enter Dashboard')}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </>
   );
 }

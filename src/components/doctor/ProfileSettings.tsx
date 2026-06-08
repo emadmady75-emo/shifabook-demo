@@ -211,6 +211,15 @@ export default function ProfileSettings({ doctor, language }: ProfileSettingsPro
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
 
+      // Clear the password_reset_required flag if they change password inside Settings
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase
+          .from('clinic_users')
+          .update({ password_reset_required: false })
+          .eq('auth_user_id', user.id);
+      }
+
       setPassMessage({
         type: 'success',
         text: isAr ? 'تم تغيير كلمة المرور بنجاح' : 'Password changed successfully'

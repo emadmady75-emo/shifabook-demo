@@ -57,6 +57,7 @@ export interface ClinicUser {
   is_active: boolean;
   auth_user_id: string;
   created_at: string;
+  password_reset_required?: boolean;
 }
 
 interface BookingContextType {
