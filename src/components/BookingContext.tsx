@@ -743,12 +743,11 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
 
         let data = null;
-        const { data: updatedData, error } = await supabase
+        const { data: updatedRows, error } = await supabase
           .from('appointments')
           .update(updateData)
           .eq('id', targetId)
-          .select()
-          .single();
+          .select();
 
         if (error) {
           if (error.code === '42703' || error.code === 'PGRST204' || error.message?.includes('schema cache')) {
@@ -756,16 +755,37 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
               .from('appointments')
               .update({ status: 'cancelled' })
               .eq('id', targetId)
-              .select()
-              .single();
-            if (fallbackResult.error) throw fallbackResult.error;
-            data = fallbackResult.data;
+              .select();
+            if (fallbackResult.error) {
+              console.error('Supabase cancellation fallback error:', fallbackResult.error);
+              throw new Error(fallbackResult.error.message || 'Failed to cancel appointment in Supabase');
+            }
+            data = Array.isArray(fallbackResult.data) && fallbackResult.data.length > 0
+              ? fallbackResult.data[0]
+              : null;
           } else {
             console.error('Supabase cancellation error:', error);
             throw new Error(error.message || 'Failed to cancel appointment in Supabase');
           }
         } else {
-          data = updatedData;
+          data = Array.isArray(updatedRows) && updatedRows.length > 0
+            ? updatedRows[0]
+            : null;
+        }
+
+        if (!data) {
+          if (typeof window !== 'undefined') {
+            window.alert("تعذر العثور على هذا الموعد في قاعدة البيانات. تم تحديث حالة الحجز محليًا، يرجى اختيار موعد جديد.");
+          }
+          // Clear stale activeBooking from localStorage/state
+          localStorage.removeItem('shifabook_active_booking_details');
+          setActiveBooking(null);
+          saveActiveId(null);
+
+          // Update local state to cancelled for immediate feedback, then return early
+          setBookings(prev => prev.map(b => (b.id === targetId || b.id === bookingId) ? { ...b, status: 'cancelled' as const } : b));
+          await refreshAppointments();
+          return;
         }
 
         console.log('Successfully cancelled appointment in Supabase:', data);
