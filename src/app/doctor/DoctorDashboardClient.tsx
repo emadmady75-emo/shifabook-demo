@@ -360,6 +360,14 @@ export default function DoctorDashboardClient({ doctor, initialAppointments }: D
               >
                 {resetLoading ? (isAr ? 'جاري التحديث وتأمين الحساب...' : 'Updating & securing...') : (isAr ? 'حفظ كلمة المرور والدخول للوحة التحكم' : 'Save Password & Enter Dashboard')}
               </button>
+              
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="w-full py-3 rounded-xl border border-rose-500/20 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 font-bold text-xs transition-colors mt-2"
+              >
+                {isAr ? 'تسجيل الخروج' : 'Logout / Sign Out'}
+              </button>
             </form>
           </div>
         </div>
