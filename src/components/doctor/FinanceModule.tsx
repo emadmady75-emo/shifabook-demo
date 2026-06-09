@@ -131,7 +131,7 @@ export default function FinanceModule() {
       appointment_date: appt.appointment_date,
       appointment_time: appt.appointment_time,
       doctor_name: docInfo.name,
-      consultation_fee: docInfo.fee,
+      consultation_fee: appt.consultation_fee_at_booking ?? docInfo.fee,
       // payment overrides
       status: paymentRecord?.status || 'unpaid',
       method: paymentRecord?.method || 'cash',

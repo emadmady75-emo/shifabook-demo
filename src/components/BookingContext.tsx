@@ -442,7 +442,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             date: appt.appointment_date,
             timeSlot: appt.appointment_time,
             status: appt.status as any,
-            price: doctorProfile.consultationFee ?? 0,
+            price: appt.consultation_fee_at_booking ?? doctorProfile.consultationFee ?? 0,
             createdAt: appt.created_at,
             cancelled_by: appt.cancelled_by,
             cancelled_at: appt.cancelled_at,
@@ -476,7 +476,8 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       appointment_date: date,
       appointment_time: time,
       status: 'pending',
-      source: 'web'
+      source: 'web',
+      consultation_fee_at_booking: doctorProfile?.consultationFee ?? 0
     };
 
     // Supabase insert if doctor ID is available
@@ -1244,7 +1245,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           date: appt.appointment_date,
           timeSlot: appt.appointment_time,
           status: appt.status as any,
-          price: doctorProfile?.consultationFee ?? 0,
+          price: appt.consultation_fee_at_booking ?? doctorProfile?.consultationFee ?? 0,
           createdAt: appt.created_at,
           cancelled_by: appt.cancelled_by,
           cancelled_at: appt.cancelled_at,

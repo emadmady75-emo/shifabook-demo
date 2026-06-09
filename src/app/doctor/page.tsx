@@ -28,6 +28,7 @@ export interface SupabaseAppointment {
   status: string;
   source: string;
   created_at: string;
+  consultation_fee_at_booking?: number | null;
 }
 
 export default async function DoctorDashboardPage() {
