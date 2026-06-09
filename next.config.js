@@ -1,8 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  webpackBuildWorker: false,
   experimental: {
+    webpackBuildWorker: false,
     workerThreads: false,
     cpus: 1
   }

@@ -407,7 +407,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           date: appt.appointment_date,
           timeSlot: appt.appointment_time,
           status: appt.status as any,
-          price: scheduleConfig.pricePerAppointment,
+          price: doctorProfile?.consultationFee ?? 0,
           createdAt: new Date().toISOString()
         }));
         setBookings(mapped);
@@ -442,7 +442,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             date: appt.appointment_date,
             timeSlot: appt.appointment_time,
             status: appt.status as any,
-            price: doctorProfile.consultationFee || 400,
+            price: doctorProfile.consultationFee ?? 0,
             createdAt: appt.created_at,
             cancelled_by: appt.cancelled_by,
             cancelled_at: appt.cancelled_at,
@@ -625,7 +625,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       date,
       timeSlot: time,
       status: 'pending',
-      price: scheduleConfig.pricePerAppointment,
+      price: doctorProfile?.consultationFee ?? 0,
       createdAt: new Date().toISOString(),
       facilityName: language === 'ar' ? selectedFacility.name : selectedFacility.nameEn,
       facilityMapUrl: selectedFacility.mapUrl,
@@ -1244,7 +1244,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           date: appt.appointment_date,
           timeSlot: appt.appointment_time,
           status: appt.status as any,
-          price: scheduleConfig.pricePerAppointment,
+          price: doctorProfile?.consultationFee ?? 0,
           createdAt: appt.created_at,
           cancelled_by: appt.cancelled_by,
           cancelled_at: appt.cancelled_at,

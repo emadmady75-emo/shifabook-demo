@@ -21,7 +21,7 @@ export default function ProfileSettings({ doctor, language }: ProfileSettingsPro
   const [fullName, setFullName] = useState(doctor.full_name || '');
   const [specialization, setSpecialization] = useState(doctor.specialization || '');
   const [clinicName, setClinicName] = useState(doctor.clinic_name || '');
-  const [consultationFee, setConsultationFee] = useState(doctor.consultation_fee || 400);
+  const [consultationFee, setConsultationFee] = useState(doctor.consultation_fee ?? 0);
   const [city, setCity] = useState(doctor.city || '');
 
   // File upload states

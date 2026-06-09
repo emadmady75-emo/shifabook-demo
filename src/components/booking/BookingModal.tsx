@@ -22,6 +22,7 @@ export default function BookingModal({
 }: BookingModalProps) {
   const { 
     language, 
+    doctorProfile,
     bookAppointment, 
     rescheduleAppointment, 
     bookings,
@@ -602,7 +603,7 @@ export default function BookingModal({
                 <div className="p-3.5 rounded-xl bg-slate-900 border border-teal-950/30 flex items-center justify-between text-xs text-right">
                   <span className="text-slate-500">{isAr ? 'طريقة الدفع:' : 'Payment mode:'}</span>
                   <span className="font-bold text-slate-300">
-                    {isAr ? 'الدفع في العيادة بعد الكشف (500 ج.م)' : 'Pay at Clinic after checkup (500 EGP)'}
+                    {isAr ? `الدفع في العيادة بعد الكشف (${doctorProfile?.consultationFee ?? 0} ج.م)` : `Pay at Clinic after checkup (${doctorProfile?.consultationFee ?? 0} EGP)`}
                   </span>
                 </div>
               )}

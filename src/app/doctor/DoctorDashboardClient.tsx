@@ -93,7 +93,7 @@ export default function DoctorDashboardClient({ doctor, initialAppointments }: D
       date: appt.appointment_date,
       timeSlot: appt.appointment_time,
       status: appt.status as any,
-      price: doctor.consultation_fee || 400,
+      price: doctor.consultation_fee ?? 0,
       createdAt: appt.created_at,
     }));
     setBookings(mapped);

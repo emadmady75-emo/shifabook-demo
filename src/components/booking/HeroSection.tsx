@@ -204,7 +204,7 @@ export default function HeroSection() {
                       <p className="text-[11px] text-slate-500 font-semibold">{isAr ? 'الدفع نقداً أو بالفيزا في العيادة' : 'Pay at clinic'}</p>
                     </div>
                     <div className="text-right">
-                      <span className="text-3xl font-black text-teal-300">{doctorProfile.consultationFee || 400}</span>
+                      <span className="text-3xl font-black text-teal-300">{doctorProfile.consultationFee ?? 0}</span>
                       <span className="text-xs font-bold text-teal-400 mr-1"> {isAr ? 'ج.م' : 'EGP'}</span>
                     </div>
                   </div>

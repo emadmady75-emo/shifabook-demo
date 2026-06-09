@@ -129,7 +129,7 @@ export default function DoctorPublicBookingPage() {
               <div className="w-full md:w-auto p-5 rounded-2xl bg-teal-950/20 border border-teal-900/40 text-center space-y-2">
                 <span className="text-xs text-slate-400 block">{isAr ? 'قيمة الكشف بالعيادة' : 'Clinic Consult Rate'}</span>
                 <span className="text-2xl font-black text-white block">
-                  {doctorProfile.consultationFee || 400} {isAr ? 'ج.م' : 'EGP'}
+                  {doctorProfile.consultationFee ?? 0} {isAr ? 'ج.م' : 'EGP'}
                 </span>
                 <span className="text-[10px] text-slate-500 block">
                   {isAr ? 'تأكيد الحجز فوري عبر الواتساب' : 'WhatsApp Confirmed'}
