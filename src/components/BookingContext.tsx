@@ -35,6 +35,43 @@ export interface PatientBooking {
   rescheduled_at?: string | null;
 }
 
+const DOCTOR_NAME_EN_MAP: Record<string, string> = {
+  'د. عبدالرحمن المصري': 'Dr. Abdelrahman Elmasry',
+  'د. عبدالله المصري': 'Dr. Abdullah El-Masry'
+};
+
+const DOCTOR_SPEC_EN_MAP: Record<string, string> = {
+  'إستشاري طب الأطفال والأمراض الصدرية والحساسية والمناعة': 'Consultant of Pediatrics, Chest Diseases, Allergy and Immunology',
+  'استشاري طب وجراحة القلب والأوعية الدموية': 'Consultant Cardiologist & Vascular Surgeon',
+  'طب وجراحة القلب، القسطرة التداخلية، وعلاج ارتفاع ضغط الدم الشرياني والأوعية الدموية.': 'Interventional Cardiology, hypertension management, and arterial disorders.'
+};
+
+const FACILITY_NAME_EN_MAP: Record<string, string> = {
+  'فرع المهندسين - الجيزة': 'Mohandessin Branch - Giza',
+  'فرع التجمع الخامس - القاهرة': 'New Cairo Branch - Cairo'
+};
+
+const FACILITY_ADDR_EN_MAP: Record<string, string> = {
+  'شارع جامعة الدول العربية، المهندسين': 'Jamiat Al Dowal Al Arabiya Street, Mohandessin',
+  'شارع التسعين الشمالي، التجمع الخامس': 'North 90th Street, Fifth Settlement'
+};
+
+export const getDoctorNameEn = (name: string): string => {
+  return DOCTOR_NAME_EN_MAP[name] || EGYPTIAN_DOCTORS[0].nameEn;
+};
+
+export const getDoctorSpecEn = (spec: string): string => {
+  return DOCTOR_SPEC_EN_MAP[spec] || EGYPTIAN_DOCTORS[0].specializationEn;
+};
+
+export const getFacilityNameEn = (name: string): string => {
+  return FACILITY_NAME_EN_MAP[name] || EGYPTIAN_FACILITIES.find(f => f.name === name)?.nameEn || 'Mohandessin Branch - Giza';
+};
+
+export const getFacilityAddrEn = (address: string): string => {
+  return FACILITY_ADDR_EN_MAP[address] || EGYPTIAN_FACILITIES.find(f => f.address === address)?.addressEn || 'Jamiat Al Dowal Al Arabiya Street, Mohandessin';
+};
+
 export function getActorArabicLabel(actor: string | null | undefined, language: 'ar' | 'en' = 'ar'): string {
   const isEn = language === 'en';
   if (!actor) return isEn ? "at your request" : "بناءً على طلبك";
@@ -544,12 +581,16 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
               data: {
                 patient_name: name,
                 patient_phone: phone,
-                doctor_name: language === 'ar' ? doctorProfile.name : doctorProfile.nameEn,
-                specialization: language === 'ar' ? doctorProfile.specialization : doctorProfile.specializationEn,
+                doctor_name: doctorProfile.name,
+                doctor_name_en: getDoctorNameEn(doctorProfile.name),
+                specialization: doctorProfile.specialization,
+                specialization_en: getDoctorSpecEn(doctorProfile.specialization),
                 appointment_date: date,
                 appointment_time: time,
-                facility_name: language === 'ar' ? selectedFacility.name : selectedFacility.nameEn,
-                facility_address: language === 'ar' ? selectedFacility.address : selectedFacility.addressEn,
+                facility_name: selectedFacility.name,
+                facility_name_en: selectedFacility.nameEn || getFacilityNameEn(selectedFacility.name),
+                facility_address: selectedFacility.address,
+                facility_address_en: selectedFacility.addressEn || getFacilityAddrEn(selectedFacility.address),
                 facility_map_url: selectedFacility.mapUrl,
                 booking_id: bookingId,
                 language: language,
@@ -680,9 +721,10 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           const actorLabel = getActorArabicLabel(actorVal, language);
           const formattedTime = formatTimeHelper(newTime, language);
           
-          const docName = language === 'ar' ? doctorProfile.name : doctorProfile.nameEn;
+          const docNameAr = doctorProfile.name;
+          const docNameEn = getDoctorNameEn(doctorProfile.name);
           const rescheduleMessage = language === 'en'
-            ? `Hello ${bookingToMove.patientName} 👋\n\nYour appointment has been rescheduled ${actorLabel} in ShifaBook.\n\nDoctor: ${docName}\n\nPrevious appointment:\nDate: ${bookingToMove.date}\nTime: ${formatTimeHelper(bookingToMove.timeSlot, language)}\n\nNew appointment:\nDate: ${newDate}\nTime: ${formattedTime}\n\nClinic: ${selectedFacility.nameEn}\nAddress: ${selectedFacility.addressEn}\nLocation:\n${selectedFacility.mapUrl}\n\nWe look forward to seeing you at the new appointment.`
+            ? `Hello ${bookingToMove.patientName} 👋\n\nYour appointment has been rescheduled ${actorLabel} in ShifaBook.\n\nDoctor: ${docNameEn}\n\nPrevious appointment:\nDate: ${bookingToMove.date}\nTime: ${formatTimeHelper(bookingToMove.timeSlot, language)}\n\nNew appointment:\nDate: ${newDate}\nTime: ${formattedTime}\n\nClinic: ${selectedFacility.nameEn}\nAddress: ${selectedFacility.addressEn}\nLocation:\n${selectedFacility.mapUrl}\n\nWe look forward to seeing you at the new appointment.`
             : (actorLabel === "بناءً على طلبك"
               ? `تم تعديل موعدك بناءً على طلبك.\nالموعد الجديد: ${newDate} - ${formattedTime}`
               : `تم تعديل موعدك ${actorLabel}.\nالموعد الجديد: ${newDate} - ${formattedTime}`);
@@ -692,14 +734,18 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             data: {
               patient_name: bookingToMove.patientName,
               patient_phone: bookingToMove.mobileNumber,
-              doctor_name: docName,
-              specialization: language === 'ar' ? doctorProfile.specialization : doctorProfile.specializationEn,
+              doctor_name: docNameAr,
+              doctor_name_en: docNameEn,
+              specialization: doctorProfile.specialization,
+              specialization_en: getDoctorSpecEn(doctorProfile.specialization),
               old_appointment_date: bookingToMove.date,
               old_appointment_time: bookingToMove.timeSlot,
               new_appointment_date: newDate,
               new_appointment_time: newTime,
-              facility_name: language === 'ar' ? selectedFacility.name : selectedFacility.nameEn,
-              facility_address: language === 'ar' ? selectedFacility.address : selectedFacility.addressEn,
+              facility_name: selectedFacility.name,
+              facility_name_en: selectedFacility.nameEn || getFacilityNameEn(selectedFacility.name),
+              facility_address: selectedFacility.address,
+              facility_address_en: selectedFacility.addressEn || getFacilityAddrEn(selectedFacility.address),
               facility_map_url: selectedFacility.mapUrl,
               booking_id: bookingId,
               rescheduled_by: rescheduledBy,
@@ -852,35 +898,40 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
             const actorVal = data.cancelled_by || (clinicUser ? `${clinicUser.full_name} (${clinicUser.role})` : 'patient');
             const actorLabel = getActorArabicLabel(actorVal, language);
-            const docName = language === 'ar' ? doctorProfile.name : doctorProfile.nameEn;
-            const cancelMessage = language === 'en'
-              ? `Hello ${data.patient_name} 👋\n\nYour appointment has been cancelled ${actorLabel} in ShifaBook.\n\nDoctor: ${docName}\nDate: ${data.appointment_date}\nTime: ${formatTimeHelper(data.appointment_time, language)}\n\nClinic: ${facility.nameEn}\nAddress: ${facility.addressEn}\nLocation:\n${facility.mapUrl}\n\nYou can book a new appointment anytime through the booking page.\n\nThank you for using ShifaBook.`
-              : (actorLabel === "بناءً على طلبك"
-                ? "تم إلغاء موعدك بناءً على طلبك."
-                : `تم إلغاء موعدك ${actorLabel}.`);
+             const docNameAr = doctorProfile.name;
+             const docNameEn = getDoctorNameEn(doctorProfile.name);
+             const cancelMessage = language === 'en'
+               ? `Hello ${data.patient_name} 👋\n\nYour appointment has been cancelled ${actorLabel} in ShifaBook.\n\nDoctor: ${docNameEn}\nDate: ${data.appointment_date}\nTime: ${formatTimeHelper(data.appointment_time, language)}\n\nClinic: ${facility.nameEn}\nAddress: ${facility.addressEn}\nLocation:\n${facility.mapUrl}\n\nYou can book a new appointment anytime through the booking page.\n\nThank you for using ShifaBook.`
+               : (actorLabel === "بناءً على طلبك"
+                 ? "تم إلغاء موعدك بناءً على طلبك."
+                 : `تم إلغاء موعدك ${actorLabel}.`);
 
-            const payload = {
-              event_type: 'booking.cancelled',
-              data: {
-                patient_name: data.patient_name,
-                patient_phone: data.patient_phone,
-                doctor_name: docName,
-                specialization: language === 'ar' ? doctorProfile.specialization : doctorProfile.specializationEn,
-                appointment_date: data.appointment_date,
-                appointment_time: data.appointment_time,
-                facility_name: language === 'ar' ? facility.name : facility.nameEn,
-                facility_address: language === 'ar' ? facility.address : facility.addressEn,
-                facility_map_url: facility.mapUrl,
-                booking_id: data.id,
-                cancelled_by: data.cancelled_by || cancelledBy,
-                performed_by_role: clinicUser ? clinicUser.role : 'patient',
-                performed_by_name: clinicUser ? clinicUser.full_name : data.patient_name,
-                actor_label: actorLabel,
-                message: cancelMessage,
-                language: language,
-                locale: language
-              }
-            };
+             const payload = {
+               event_type: 'booking.cancelled',
+               data: {
+                 patient_name: data.patient_name,
+                 patient_phone: data.patient_phone,
+                 doctor_name: docNameAr,
+                 doctor_name_en: docNameEn,
+                 specialization: doctorProfile.specialization,
+                 specialization_en: getDoctorSpecEn(doctorProfile.specialization),
+                 appointment_date: data.appointment_date,
+                 appointment_time: data.appointment_time,
+                 facility_name: facility.name,
+                 facility_name_en: facility.nameEn || getFacilityNameEn(facility.name),
+                 facility_address: facility.address,
+                 facility_address_en: facility.addressEn || getFacilityAddrEn(facility.address),
+                 facility_map_url: facility.mapUrl,
+                 booking_id: data.id,
+                 cancelled_by: data.cancelled_by || cancelledBy,
+                 performed_by_role: clinicUser ? clinicUser.role : 'patient',
+                 performed_by_name: clinicUser ? clinicUser.full_name : data.patient_name,
+                 actor_label: actorLabel,
+                 message: cancelMessage,
+                 language: language,
+                 locale: language
+               }
+             };
 
             // Client-side Log: [CLIENT_WHATSAPP_EVENT]
             console.log('[CLIENT_WHATSAPP_EVENT]', payload);
