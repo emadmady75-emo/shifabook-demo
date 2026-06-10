@@ -8,7 +8,7 @@ import DaySelector from '@/components/booking/DaySelector';
 import BookingGrid from '@/components/booking/BookingGrid';
 import BookingModal from '@/components/booking/BookingModal';
 import RescheduleAlert from '@/components/booking/RescheduleAlert';
-import { useBooking, PatientBooking, getActorArabicLabel } from '@/components/BookingContext';
+import { useBooking, PatientBooking, getActorArabicLabel, getQueueCode } from '@/components/BookingContext';
 import { formatDateOnly } from '@/lib/dates';
 
 export default function DoctorPublicBookingPage() {
@@ -305,6 +305,11 @@ export default function DoctorPublicBookingPage() {
                 <div className="flex justify-between border-b border-teal-950/60 pb-2.5 text-xs text-slate-400">
                   <span>{isAr ? 'كود الحجز:' : 'Booking Reference:'}</span>
                   <span className="font-mono font-bold text-white uppercase">{lastCompletedBooking.id.substring(5, 12)}</span>
+                </div>
+
+                <div className="flex justify-between border-b border-teal-950/60 pb-2.5 text-xs text-slate-400">
+                  <span>{isAr ? 'رقم الدور:' : 'Queue Number:'}</span>
+                  <span className="font-bold text-teal-400 font-mono text-sm">{getQueueCode(lastCompletedBooking.date, lastCompletedBooking.timeSlot, bookings)}</span>
                 </div>
 
                 <div className="space-y-1">

@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { useBooking, PatientBooking, WhatsAppEvent } from '../BookingContext';
+import { useBooking, PatientBooking, WhatsAppEvent, getQueueCode } from '../BookingContext';
 import { formatDateOnly } from '@/lib/dates';
 
 export default function AppointmentsList() {
@@ -258,6 +258,7 @@ export default function AppointmentsList() {
             <table className="w-full text-sm border-collapse">
               <thead>
                 <tr className="border-b border-teal-950 text-slate-400 text-xs font-bold">
+                  <th className="pb-3 text-right">{isAr ? 'الدور' : 'Queue'}</th>
                   <th className="pb-3 text-right">{isAr ? 'المريض' : 'Patient'}</th>
                   <th className="pb-3 text-right">{isAr ? 'اليوم' : 'Date'}</th>
                   <th className="pb-3 text-right">{isAr ? 'المقعد / الوقت' : 'Seat / Time'}</th>
@@ -268,6 +269,11 @@ export default function AppointmentsList() {
               <tbody className="divide-y divide-teal-950/40 text-slate-200">
                 {filteredActiveBookings.map((appt) => (
                   <tr key={appt.id} className="hover:bg-teal-950/10 transition-colors">
+                    <td className="py-4">
+                      <span className="px-2 py-1 rounded-lg bg-teal-500/10 text-teal-400 border border-teal-500/20 font-bold font-mono text-xs">
+                        {getQueueCode(appt.date, appt.timeSlot, bookings)}
+                      </span>
+                    </td>
                     <td className="py-4">
                       <div className="font-bold text-white">{appt.patientName}</div>
                       <div className="text-xs text-slate-400">{appt.mobileNumber}</div>

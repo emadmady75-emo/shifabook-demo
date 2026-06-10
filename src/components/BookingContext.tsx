@@ -22,6 +22,32 @@ export type { Facility, DoctorProfile, ScheduleConfig };
 // - Implement validator to prevent overlapping doctor appointments across branches
 export const DEMO_FACILITIES = [EGYPTIAN_FACILITIES[0]];
 
+export const getQueueCode = (
+  dateStr: string,
+  timeStr: string,
+  allBookings: { date: string; timeSlot: string; status?: string }[]
+): string => {
+  if (!dateStr || !timeStr) return '';
+  const dateObj = parseDateOnlySafe(dateStr);
+  const dayOfWeek = dateObj.getDay();
+  const dayLetter = ['S', 'M', 'T', 'W', 'T', 'F', 'S'][dayOfWeek];
+
+  const sameDayTimes = Array.from(new Set(
+    allBookings
+      .filter(b => b.date === dateStr && b.status !== 'cancelled')
+      .map(b => b.timeSlot)
+  ));
+
+  if (!sameDayTimes.includes(timeStr)) {
+    sameDayTimes.push(timeStr);
+  }
+
+  sameDayTimes.sort();
+  const index = sameDayTimes.indexOf(timeStr);
+  const seq = index + 1;
+  return `${dayLetter}${String(seq).padStart(2, '0')}`;
+};
+
 export interface PatientBooking {
   id: string;
   patientName: string;
