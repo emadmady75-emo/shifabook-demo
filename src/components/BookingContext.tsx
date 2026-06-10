@@ -28,7 +28,7 @@ export interface PatientBooking {
   mobileNumber: string;
   date: string;       // YYYY-MM-DD
   timeSlot: string;   // HH:MM
-  status: 'pending' | 'confirmed' | 'cancelled' | 'attended';
+  status: 'pending' | 'confirmed' | 'cancelled' | 'attended' | 'no_show';
   price: number;      // Revenue Tracking (e.g. 500 EGP)
   createdAt: string;
   facilityName?: string;
@@ -146,6 +146,7 @@ interface BookingContextType {
   cancelAppointment: (bookingId: string) => Promise<void>;
   confirmAttendance: (bookingId: string) => Promise<void>;
   markAttended: (bookingId: string) => Promise<void>;
+  markNoShow: (bookingId: string) => Promise<void>;
   triggerMockWhatsAppEvent: (type: WhatsAppEvent['type'], booking: PatientBooking) => void;
   generateTimeSlotsForDate: (dateStr: string) => TimeSlot[];
   isHydrated: boolean;
@@ -1097,6 +1098,43 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     await refreshAppointments();
   };
 
+  const markNoShow = async (bookingId: string) => {
+    if (clinicUser && !['admin', 'supervisor', 'reception'].includes(clinicUser.role)) {
+      const errorMsg = language === 'ar' ? "ليس لديك صلاحية لتنفيذ هذا الإجراء." : "You do not have permission to perform this action.";
+      if (typeof window !== 'undefined') window.alert(errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    if (bookingId.length === 36) {
+      try {
+        const { createClient } = await import('@/lib/supabase/client');
+        const supabase = createClient();
+
+        let updateData: any = { status: 'no_show' };
+
+        const { error } = await supabase
+          .from('appointments')
+          .update(updateData)
+          .eq('id', bookingId);
+
+        if (error) {
+          throw error;
+        }
+      } catch (err) {
+        console.error('Failed to mark no-show in Supabase:', err);
+      }
+    }
+
+    const updated = bookings.map(b => {
+      if (b.id === bookingId) {
+        return { ...b, status: 'no_show' as any };
+      }
+      return b;
+    });
+    setBookings(updated);
+    await refreshAppointments();
+  };
+
   // Generate Slots dynamically for a chosen date based on capacity config
   const generateTimeSlotsForDate = (dateStr: string): TimeSlot[] => {
     const slots: TimeSlot[] = [];
@@ -1440,6 +1478,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         cancelAppointment,
         confirmAttendance,
         markAttended,
+        markNoShow,
         triggerMockWhatsAppEvent,
         generateTimeSlotsForDate,
         isHydrated,

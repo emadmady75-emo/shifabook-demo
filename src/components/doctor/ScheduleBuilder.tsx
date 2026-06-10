@@ -4,14 +4,13 @@ import React, { useState } from 'react';
 import { useBooking, ScheduleConfig } from '../BookingContext';
 
 export default function ScheduleBuilder() {
-  const { language, scheduleConfig, updateScheduleConfig } = useBooking();
+  const { language, scheduleConfig, updateScheduleConfig, doctorProfile } = useBooking();
   const isAr = language === 'ar';
 
   const [startTime, setStartTime] = useState(scheduleConfig.startTime);
   const [endTime, setEndTime] = useState(scheduleConfig.endTime);
   const [slotDuration, setSlotDuration] = useState(scheduleConfig.slotDurationMinutes);
   const [capacity, setCapacity] = useState(scheduleConfig.capacityPerSlot);
-  const [price, setPrice] = useState(scheduleConfig.pricePerAppointment);
   const [workingDays, setWorkingDays] = useState<number[]>(scheduleConfig.workingDays);
   const [success, setSuccess] = useState(false);
 
@@ -42,7 +41,7 @@ export default function ScheduleBuilder() {
       endTime,
       slotDurationMinutes: Number(slotDuration),
       capacityPerSlot: Number(capacity),
-      pricePerAppointment: Number(price),
+      pricePerAppointment: doctorProfile?.consultationFee ?? scheduleConfig.pricePerAppointment,
       workingDays,
     });
 
@@ -59,8 +58,8 @@ export default function ScheduleBuilder() {
         </h3>
         <p className="text-xs text-slate-400 mt-1">
           {isAr 
-            ? 'قم بتهيئة مواعيد البدء والانتهاء وتكلفة الكشف وسيقوم النظام بتعديل خريطة مقاعد الحجز الفورية للمرضى.' 
-            : 'Configure starting times, consultation rates, and capacities to update patient-facing seat grids.'}
+            ? 'قم بتهيئة مواعيد البدء والانتهاء وسيقوم النظام بتعديل خريطة مقاعد الحجز الفورية للمرضى.' 
+            : 'Configure starting times and capacities to update patient-facing seat grids.'}
         </p>
       </div>
 
@@ -126,8 +125,8 @@ export default function ScheduleBuilder() {
           </div>
         </div>
 
-        {/* Slot Duration, Capacity and Price Inputs */}
-        <div className="grid grid-cols-3 gap-4">
+        {/* Slot Duration and Capacity Inputs */}
+        <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-slate-300 block">
               {isAr ? 'مدة الجلسة (دقائق)' : 'Slot Duration'}
@@ -135,7 +134,7 @@ export default function ScheduleBuilder() {
             <select
               value={slotDuration}
               onChange={(e) => setSlotDuration(Number(e.target.value))}
-              className="w-full px-4 py-3 rounded-xl bg-[#09151e] border border-teal-950/60 text-slate-100 focus:outline-none focus:border-teal-500 text-sm"
+              className="w-full px-4 py-3 rounded-xl bg-[#09151e] border border-teal-500/30 text-slate-100 focus:outline-none focus:border-teal-500 text-sm"
             >
               <option value="15">15 {isAr ? 'دقيقة' : 'min'}</option>
               <option value="20">20 {isAr ? 'دقيقة' : 'min'}</option>
@@ -156,22 +155,7 @@ export default function ScheduleBuilder() {
               required
               value={capacity}
               onChange={(e) => setCapacity(Number(e.target.value))}
-              className="w-full px-4 py-3 rounded-xl bg-[#09151e] border border-teal-950/60 text-slate-100 focus:outline-none focus:border-teal-500 text-sm"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-300 block">
-              {isAr ? 'قيمة الكشف (ج.م)' : 'Consultation Fee'}
-            </label>
-            <input
-              type="number"
-              min="50"
-              max="5000"
-              required
-              value={price}
-              onChange={(e) => setPrice(Number(e.target.value))}
-              className="w-full px-4 py-3 rounded-xl bg-[#09151e] border border-teal-950/60 text-slate-100 focus:outline-none focus:border-teal-500 text-sm"
+              className="w-full px-4 py-3 rounded-xl bg-[#09151e] border border-teal-500/30 text-slate-100 focus:outline-none focus:border-teal-500 text-sm"
             />
           </div>
         </div>

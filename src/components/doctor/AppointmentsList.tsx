@@ -11,6 +11,7 @@ export default function AppointmentsList() {
     cancelAppointment, 
     confirmAttendance, 
     markAttended,
+    markNoShow,
     whatsappEvents, 
     rescheduleAppointment, 
     generateTimeSlotsForDate, 
@@ -170,6 +171,14 @@ export default function AppointmentsList() {
       );
     }
 
+    if (appt.status === 'no_show') {
+      return (
+        <span className="px-2 py-1 rounded-lg bg-orange-500/10 text-orange-400 text-xs border border-orange-500/20 font-bold">
+          {isAr ? '✕ لم يحضر' : '✕ No Show'}
+        </span>
+      );
+    }
+
     const isPast = isAppointmentPast(appt.date, appt.timeSlot);
     if (appt.status === 'attended' || isPast) {
       return (
@@ -219,6 +228,7 @@ export default function AppointmentsList() {
   const showRescheduleBtn = (appt: PatientBooking) => !isAppointmentPast(appt.date, appt.timeSlot) && (!clinicUser || clinicUser.role !== 'accountant');
   const showCancelBtn = (appt: PatientBooking) => !clinicUser || clinicUser.role === 'admin';
   const showMarkAttendedBtn = (appt: PatientBooking) => appt.status === 'confirmed' && (!clinicUser || clinicUser.role === 'admin' || clinicUser.role === 'supervisor' || clinicUser.role === 'reception');
+  const showMarkNoShowBtn = (appt: PatientBooking) => appt.status === 'confirmed' && (!clinicUser || clinicUser.role === 'admin' || clinicUser.role === 'supervisor' || clinicUser.role === 'reception');
 
   return (
     <>
@@ -283,6 +293,14 @@ export default function AppointmentsList() {
                             className="px-3 py-1.5 rounded-lg bg-emerald-500 text-emerald-950 hover:bg-emerald-400 font-bold text-xs transition-colors"
                           >
                             {isAr ? 'تسجيل حضور' : 'Mark Attended'}
+                          </button>
+                        )}
+                        {showMarkNoShowBtn(appt) && (
+                          <button
+                            onClick={() => markNoShow(appt.id)}
+                            className="px-3 py-1.5 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-950 hover:bg-rose-950/40 text-xs transition-colors font-semibold"
+                          >
+                            {isAr ? 'عدم حضور' : 'No Show'}
                           </button>
                         )}
                         {showRescheduleBtn(appt) && (

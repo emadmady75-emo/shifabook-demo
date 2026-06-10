@@ -33,7 +33,6 @@ export default function StatsDashboard() {
     .reduce((s, b) => s + b.price, 0);
 
   const totalGrossRevenue = confirmedRevenue + pendingRevenue;
-  const potentialLoss     = cancelledBookings.reduce((s, b) => s + b.price, 0);
 
   const totalWeeklyCapacity = 16 * scheduleConfig.workingDays.length * scheduleConfig.capacityPerSlot;
   const occupancyPct = totalWeeklyCapacity > 0
@@ -44,6 +43,77 @@ export default function StatsDashboard() {
   const occupancyColor = occupancyPct >= 75 ? 'from-emerald-400 to-teal-400'
     : occupancyPct >= 40 ? 'from-teal-400 to-cyan-400'
     : 'from-amber-400 to-orange-400';
+
+  // Attendance Rate calculation:
+  // Formula: attended_appointments / (total_completed + total_no_show + total_cancelled_after_confirmation)
+  const attendedAppts = bookings.filter(
+    b => b.status === 'attended' || (b.status !== 'cancelled' && b.status !== 'no_show' && isAppointmentPast(b.date, b.timeSlot))
+  ).length;
+
+  const totalCompleted = attendedAppts;
+  const totalNoShow = bookings.filter(b => b.status === 'no_show').length;
+  const totalCancelledAfterConfirm = bookings.filter(
+    b => b.status === 'cancelled' && (b.confirmed_by !== null || b.confirmed_at !== null)
+  ).length;
+
+  const attendanceDenominator = totalCompleted + totalNoShow + totalCancelledAfterConfirm;
+  const attendanceRate = attendanceDenominator > 0
+    ? Math.round((attendedAppts / attendanceDenominator) * 100)
+    : 100;
+
+  // Weekly Revenue Growth calculation:
+  const getWeekRanges = () => {
+    const ranges = [];
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    for (let i = 5; i >= 0; i--) {
+      const start = new Date(today);
+      start.setDate(today.getDate() - (i * 7 + 6));
+      const end = new Date(today);
+      end.setDate(today.getDate() - (i * 7));
+
+      ranges.push({
+        startStr: formatDateOnly(start),
+        endStr: formatDateOnly(end),
+        labelAr: i === 0 
+          ? 'الأسبوع الحالي' 
+          : i === 1 
+            ? 'الأسبوع السابق' 
+            : `منذ ${i} أسابيع`,
+        labelEn: i === 0 
+          ? 'Current Week' 
+          : i === 1 
+            ? 'Prev Week' 
+            : `${i}w ago`
+      });
+    }
+    return ranges;
+  };
+
+  const weekRanges = getWeekRanges();
+  const weeklyData = weekRanges.map(range => {
+    const revenue = bookings
+      .filter(b => b.status !== 'cancelled')
+      .filter(b => b.date >= range.startStr && b.date <= range.endStr)
+      .reduce((sum, b) => sum + (b.price || 0), 0);
+    return {
+      ...range,
+      revenue
+    };
+  });
+
+  const maxRev = Math.max(...weeklyData.map(w => w.revenue), 1000);
+  const currentWeekRev = weeklyData[5].revenue;
+  const prevWeekRev = weeklyData[4].revenue;
+
+  let growthPct = 0;
+  if (prevWeekRev > 0) {
+    growthPct = Math.round(((currentWeekRev - prevWeekRev) / prevWeekRev) * 100);
+  } else if (currentWeekRev > 0) {
+    growthPct = 100;
+  }
+  const growthSign = growthPct >= 0 ? '+' : '';
 
   const cards = [
     {
@@ -92,42 +162,96 @@ export default function StatsDashboard() {
       ),
     },
     {
-      key: 'leakage',
-      labelAr: 'إيرادات ضائعة (الإلغاءات)',
-      labelEn: 'Revenue Leakage',
-      value: `${potentialLoss.toLocaleString()}`,
-      unit: isAr ? 'ج.م' : 'EGP',
-      badge: isAr ? 'خسارة' : 'Loss',
-      badgeCls: 'bg-rose-500/10 text-rose-300 border-rose-500/20',
-      subLeft: isAr ? `${cancelledBookings.length} إلغاء` : `${cancelledBookings.length} cancelled`,
-      subRight: isAr ? '⚡ اقتراح قائمة انتظار' : '⚡ Suggest Waitlist',
+      key: 'attendance',
+      labelAr: 'معدل الحضور',
+      labelEn: 'Attendance Rate',
+      value: `${attendanceRate}%`,
+      unit: '',
+      badge: isAr 
+        ? (attendanceRate >= 85 ? 'ممتاز' : attendanceRate >= 65 ? 'ثابت' : 'تحتاج انتباه') 
+        : (attendanceRate >= 85 ? 'Excellent' : attendanceRate >= 65 ? 'Stable' : 'Needs attention'),
+      badgeCls: attendanceRate >= 85 
+        ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20' 
+        : attendanceRate >= 65 
+          ? 'bg-amber-500/10 text-amber-300 border-amber-500/20' 
+          : 'bg-rose-500/10 text-rose-300 border-rose-500/20',
+      subLeft: isAr ? `${attendedAppts} حضور` : `${attendedAppts} attended`,
+      subRight: isAr ? `من إجمالي ${attendanceDenominator}` : `out of ${attendanceDenominator} total`,
       icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
         </svg>
       ),
-      iconCls: 'bg-rose-500/10 border-rose-500/20 text-rose-400',
-      valueColor: 'text-rose-300',
-      extra: null,
+      iconCls: attendanceRate >= 85 
+        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+        : 'bg-amber-500/10 border-amber-500/20 text-amber-400',
+      valueColor: 'text-white',
+      extra: (
+        <div className="mt-5 w-full bg-slate-900/60 rounded-full h-2 border border-teal-950/30 overflow-hidden">
+          <div
+            className={`bg-gradient-to-r ${attendanceRate >= 85 ? 'from-emerald-400 to-teal-400' : 'from-amber-400 to-orange-400'} h-full rounded-full transition-all duration-700`}
+            style={{ width: `${attendanceRate}%` }}
+          />
+        </div>
+      ),
     },
     {
-      key: 'speed',
-      labelAr: 'متوسط سرعة إتمام الحجز',
-      labelEn: 'Avg. Booking Completion',
-      value: isAr ? '٢٤ ث' : '24s',
-      unit: '',
-      badge: isAr ? 'سرعة قياسية' : 'Ultra fast',
-      badgeCls: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
-      subLeft: isAr ? 'انخفاض التخلي بنسبة ٤٢٪' : 'Drop-off reduced by 42%',
-      subRight: isAr ? 'بدون حساب أو كلمة مرور' : 'Zero friction login',
+      key: 'weeklyGrowth',
+      labelAr: 'نمو الإيرادات الأسبوعي',
+      labelEn: 'Weekly Revenue Growth',
+      value: `${currentWeekRev.toLocaleString()}`,
+      unit: isAr ? 'ج.م' : 'EGP',
+      badge: `${growthSign}${growthPct}%`,
+      badgeCls: growthPct >= 0 
+        ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20' 
+        : 'bg-rose-500/10 text-rose-300 border-rose-500/20',
+      subLeft: isAr ? `السابق: ${prevWeekRev.toLocaleString()} ج.م` : `Prev: ${prevWeekRev.toLocaleString()} EGP`,
+      subRight: isAr ? `معدل النمو` : `Growth rate`,
       icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          {growthPct >= 0 ? (
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+          ) : (
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 17h8m0 0v-8m0 8l-8-8-4 4-6-6" />
+          )}
         </svg>
       ),
-      iconCls: 'bg-teal-500/10 border-teal-500/20 text-teal-400',
+      iconCls: growthPct >= 0 
+        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+        : 'bg-rose-500/10 border-rose-500/20 text-rose-400',
       valueColor: 'text-white',
-      extra: null,
+      extra: (
+        <div className="mt-4 flex items-end justify-between gap-1.5 h-16 pt-2 border-t border-teal-950/30">
+          {weeklyData.map((week, idx) => {
+            const heightPct = Math.max(Math.min((week.revenue / maxRev) * 100, 100), 5);
+            const isCurrent = idx === 5;
+            const isPrev = idx === 4;
+            return (
+              <div key={idx} className="flex-1 flex flex-col items-center group relative">
+                {/* Tooltip */}
+                <div className="absolute bottom-full mb-1 bg-slate-950 border border-teal-500/30 text-white text-[9px] font-bold rounded px-1.5 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 shadow-xl">
+                  {isAr ? week.labelAr : week.labelEn}: {week.revenue.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+                </div>
+                {/* Bar */}
+                <div 
+                  className={`w-full rounded-t transition-all duration-500 ${
+                    isCurrent 
+                      ? 'bg-gradient-to-t from-teal-500 to-emerald-400 shadow-md shadow-teal-500/20' 
+                      : isPrev
+                        ? 'bg-teal-500/60'
+                        : 'bg-teal-950/40 border border-teal-900/30'
+                  }`}
+                  style={{ height: `${heightPct}%` }}
+                />
+                {/* Short Label */}
+                <span className="text-[8px] text-slate-500 mt-1 font-semibold scale-90 sm:scale-100">
+                  {idx + 1}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      ),
     },
   ];
 
@@ -136,43 +260,48 @@ export default function StatsDashboard() {
       {cards.map(card => (
         <div
           key={card.key}
-          className="glass-panel glass-panel-hover rounded-2xl p-5 relative overflow-hidden border border-teal-500/15 shadow-lg"
+          className="glass-panel glass-panel-hover rounded-2xl p-5 relative overflow-hidden border border-teal-500/15 shadow-lg flex flex-col justify-between"
+          style={{ minHeight: '210px' }}
         >
           {/* Background orb */}
           <div className="absolute top-0 left-0 w-20 h-20 bg-teal-500/5 rounded-full blur-2xl pointer-events-none" />
 
-          {/* Icon + badge row */}
-          <div className="flex items-start justify-between mb-4">
-            <span className={`text-[10px] font-bold px-2 py-1 rounded-lg border ${card.badgeCls}`}>
-              {card.badge}
-            </span>
-            <div className={`w-9 h-9 rounded-xl border flex items-center justify-center flex-shrink-0 ${card.iconCls}`}>
-              {card.icon}
+          <div>
+            {/* Icon + badge row */}
+            <div className="flex items-start justify-between mb-4">
+              <span className={`text-[10px] font-bold px-2 py-1 rounded-lg border ${card.badgeCls}`}>
+                {card.badge}
+              </span>
+              <div className={`w-9 h-9 rounded-xl border flex items-center justify-center flex-shrink-0 ${card.iconCls}`}>
+                {card.icon}
+              </div>
+            </div>
+
+            {/* Label */}
+            <p className="text-[11px] sm:text-xs text-slate-400 font-semibold mb-1 leading-snug">
+              {isAr ? card.labelAr : card.labelEn}
+            </p>
+
+            {/* Main value */}
+            <div className="flex items-baseline gap-1.5 flex-wrap">
+              <span className={`text-2xl sm:text-3xl font-black tabular-nums leading-none ${card.valueColor}`}>
+                {card.value}
+              </span>
+              {card.unit && (
+                <span className="text-xs font-bold text-slate-500">{card.unit}</span>
+              )}
             </div>
           </div>
 
-          {/* Label */}
-          <p className="text-[11px] sm:text-xs text-slate-400 font-semibold mb-1 leading-snug">
-            {isAr ? card.labelAr : card.labelEn}
-          </p>
+          <div>
+            {/* Optional progress bar / chart */}
+            {card.extra}
 
-          {/* Main value */}
-          <div className="flex items-baseline gap-1.5 flex-wrap">
-            <span className={`text-2xl sm:text-3xl font-black tabular-nums leading-none ${card.valueColor}`}>
-              {card.value}
-            </span>
-            {card.unit && (
-              <span className="text-xs font-bold text-slate-500">{card.unit}</span>
-            )}
-          </div>
-
-          {/* Optional progress bar */}
-          {card.extra}
-
-          {/* Footer row */}
-          <div className="mt-4 pt-3 border-t border-teal-950/50 flex flex-col sm:flex-row justify-between gap-1 text-[10px] text-slate-500">
-            <span>{card.subLeft}</span>
-            <span className="text-teal-400 font-semibold">{card.subRight}</span>
+            {/* Footer row */}
+            <div className="mt-4 pt-3 border-t border-teal-950/50 flex flex-col sm:flex-row justify-between gap-1 text-[10px] text-slate-500">
+              <span>{card.subLeft}</span>
+              <span className="text-teal-400 font-semibold">{card.subRight}</span>
+            </div>
           </div>
         </div>
       ))}
