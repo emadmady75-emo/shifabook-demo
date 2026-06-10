@@ -271,7 +271,7 @@ export default function AppointmentsList() {
                   <tr key={appt.id} className="hover:bg-teal-950/10 transition-colors">
                     <td className="py-4">
                       <span className="px-2 py-1 rounded-lg bg-teal-500/10 text-teal-400 border border-teal-500/20 font-bold font-mono text-xs">
-                        {getQueueCode(appt.date, appt.timeSlot, bookings)}
+                        {appt.queue_code || getQueueCode(appt.date, appt.timeSlot, scheduleConfig, bookings)}
                       </span>
                     </td>
                     <td className="py-4">

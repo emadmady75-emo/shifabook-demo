@@ -15,7 +15,7 @@ export default function DoctorPublicBookingPage() {
   const params = useParams();
   const handle = params?.doctorHandle as string;
 
-  const { language, doctorProfile, activeBookingId, bookings, fetchPublicAvailability, selectedFacility, setSelectedFacility, phoneVerified } = useBooking();
+  const { language, doctorProfile, activeBookingId, bookings, fetchPublicAvailability, selectedFacility, setSelectedFacility, phoneVerified, scheduleConfig } = useBooking();
   const isAr = language === 'ar';
 
   React.useEffect(() => {
@@ -309,7 +309,7 @@ export default function DoctorPublicBookingPage() {
 
                 <div className="flex justify-between border-b border-teal-950/60 pb-2.5 text-xs text-slate-400">
                   <span>{isAr ? 'رقم الدور:' : 'Queue Number:'}</span>
-                  <span className="font-bold text-teal-400 font-mono text-sm">{getQueueCode(lastCompletedBooking.date, lastCompletedBooking.timeSlot, bookings)}</span>
+                  <span className="font-bold text-teal-400 font-mono text-sm">{lastCompletedBooking.queue_code || getQueueCode(lastCompletedBooking.date, lastCompletedBooking.timeSlot, scheduleConfig, bookings)}</span>
                 </div>
 
                 <div className="space-y-1">

@@ -11,7 +11,7 @@ interface RescheduleAlertProps {
 }
 
 export default function RescheduleAlert({ onTriggerReschedule, onClear, isRescheduling = false, onCancelReschedule }: RescheduleAlertProps) {
-  const { language, activeBooking, cancelAppointment, bookings } = useBooking();
+  const { language, activeBooking, cancelAppointment, bookings, scheduleConfig } = useBooking();
   const isAr = language === 'ar';
 
   if (!activeBooking || activeBooking.status === 'cancelled' || !activeBooking.timeSlot || !activeBooking.date || !activeBooking.patientName) return null;
@@ -54,14 +54,14 @@ export default function RescheduleAlert({ onTriggerReschedule, onClear, isResche
             {isAr ? (
               <>
                 المريض: <span className="font-bold text-white">{activeBooking.patientName}</span> | 
-                رقم الدور: <span className="font-bold text-amber-400 font-mono bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">{getQueueCode(activeBooking.date, activeBooking.timeSlot, bookings)}</span> | 
+                رقم الدور: <span className="font-bold text-amber-400 font-mono bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">{activeBooking.queue_code || getQueueCode(activeBooking.date, activeBooking.timeSlot, scheduleConfig, bookings)}</span> | 
                 اليوم: <span className="font-bold text-teal-300">{activeBooking.date}</span> | 
                 الساعة: <span className="font-bold text-teal-300">{formatPeriodTime(activeBooking.timeSlot)}</span>
               </>
             ) : (
               <>
                 Patient: <span className="font-bold text-white">{activeBooking.patientName}</span> | 
-                Queue Number: <span className="font-bold text-amber-400 font-mono bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">{getQueueCode(activeBooking.date, activeBooking.timeSlot, bookings)}</span> | 
+                Queue Number: <span className="font-bold text-amber-400 font-mono bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">{activeBooking.queue_code || getQueueCode(activeBooking.date, activeBooking.timeSlot, scheduleConfig, bookings)}</span> | 
                 Date: <span className="font-bold text-teal-300">{activeBooking.date}</span> | 
                 Time: <span className="font-bold text-teal-300">{formatPeriodTime(activeBooking.timeSlot)}</span>
               </>

@@ -12,7 +12,7 @@ import { useBooking, PatientBooking, getActorArabicLabel, getQueueCode } from '@
 import { formatDateOnly } from '@/lib/dates';
 
 export default function PatientLandingPage() {
-  const { language, activeBookingId, activeBooking, doctorProfile, fetchPublicAvailability, selectedFacility, setSelectedFacility, phoneVerified, bookings } = useBooking();
+  const { language, activeBookingId, activeBooking, doctorProfile, fetchPublicAvailability, selectedFacility, setSelectedFacility, phoneVerified, bookings, scheduleConfig } = useBooking();
   const isAr = language === 'ar';
 
   React.useEffect(() => {
@@ -276,7 +276,7 @@ export default function PatientLandingPage() {
 
                 <div className="flex justify-between border-b border-teal-950/60 pb-2.5 text-xs text-slate-400">
                   <span>{isAr ? 'رقم الدور:' : 'Queue Number:'}</span>
-                  <span className="font-bold text-teal-400 font-mono text-sm">{getQueueCode(lastCompletedBooking.date, lastCompletedBooking.timeSlot, bookings)}</span>
+                  <span className="font-bold text-teal-400 font-mono text-sm">{lastCompletedBooking.queue_code || getQueueCode(lastCompletedBooking.date, lastCompletedBooking.timeSlot, scheduleConfig, bookings)}</span>
                 </div>
 
                 <div className="space-y-1">

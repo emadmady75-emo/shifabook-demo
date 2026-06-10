@@ -25,27 +25,57 @@ export const DEMO_FACILITIES = [EGYPTIAN_FACILITIES[0]];
 export const getQueueCode = (
   dateStr: string,
   timeStr: string,
-  allBookings: { date: string; timeSlot: string; status?: string }[]
+  scheduleConfig: ScheduleConfig,
+  allBookings?: { date: string; timeSlot: string; status?: string }[]
 ): string => {
   if (!dateStr || !timeStr) return '';
   const dateObj = parseDateOnlySafe(dateStr);
   const dayOfWeek = dateObj.getDay();
-  const dayLetter = ['S', 'M', 'T', 'W', 'T', 'F', 'S'][dayOfWeek];
+  const prefixes = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+  const prefix = prefixes[dayOfWeek];
 
-  const sameDayTimes = Array.from(new Set(
-    allBookings
-      .filter(b => b.date === dateStr && b.status !== 'cancelled')
-      .map(b => b.timeSlot)
-  ));
+  const startTime = scheduleConfig?.startTime || '09:00';
+  const endTime = scheduleConfig?.endTime || '17:00';
+  const slotDuration = scheduleConfig?.slotDurationMinutes || 30;
 
-  if (!sameDayTimes.includes(timeStr)) {
-    sameDayTimes.push(timeStr);
+  const [startHour, startMin] = startTime.split(':').map(Number);
+  const [endHour, endMin] = endTime.split(':').map(Number);
+  const startMinutes = startHour * 60 + startMin;
+  const endMinutes = endHour * 60 + endMin;
+
+  const [slotHour, slotMin] = timeStr.split(':').map(Number);
+  const slotMinutes = slotHour * 60 + slotMin;
+
+  let index = 0;
+  let found = false;
+  for (let m = startMinutes; m < endMinutes; m += slotDuration) {
+    index++;
+    if (m === slotMinutes) {
+      found = true;
+      break;
+    }
   }
 
-  sameDayTimes.sort();
-  const index = sameDayTimes.indexOf(timeStr);
-  const seq = index + 1;
-  return `${dayLetter}${String(seq).padStart(2, '0')}`;
+  if (found) {
+    return `${prefix}${String(index).padStart(2, '0')}`;
+  }
+
+  if (allBookings) {
+    const sameDayTimes = Array.from(new Set(
+      allBookings
+        .filter(b => b.date === dateStr && b.status !== 'cancelled')
+        .map(b => b.timeSlot)
+    ));
+    if (!sameDayTimes.includes(timeStr)) {
+      sameDayTimes.push(timeStr);
+    }
+    sameDayTimes.sort();
+    const idx = sameDayTimes.indexOf(timeStr);
+    const seq = idx + 1;
+    return `${prefix}${String(seq).padStart(2, '0')}`;
+  }
+
+  return `${prefix}01`;
 };
 
 export interface PatientBooking {
@@ -64,6 +94,7 @@ export interface PatientBooking {
   cancelled_at?: string | null;
   rescheduled_by?: string | null;
   rescheduled_at?: string | null;
+  queue_code?: string | null;
 }
 
 const DOCTOR_NAME_EN_MAP: Record<string, string> = {
@@ -447,14 +478,15 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (res.ok) {
         const data = await res.json();
         const mapped = data.map((appt: any, index: number) => ({
-          id: `public-appt-${index}`,
+          id: appt.id || `public-appt-${index}`,
           patientName: '',
           mobileNumber: '',
           date: appt.appointment_date,
           timeSlot: appt.appointment_time,
           status: appt.status as any,
           price: doctorProfile?.consultationFee ?? 0,
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
+          queue_code: appt.queue_code
         }));
         setBookings(mapped);
       }
@@ -494,6 +526,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             cancelled_at: appt.cancelled_at,
             rescheduled_by: appt.rescheduled_by,
             rescheduled_at: appt.rescheduled_at,
+            queue_code: appt.queue_code,
           }));
           setBookings(mapped);
         }
@@ -552,11 +585,13 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           throw new Error("لديك حجز نشط بالفعل مسجل بهذا الرقم. يرجى إلغاء الموعد أو تعديله أولاً.");
         }
         
+        const computedQueueCode = getQueueCode(date, time, scheduleConfig);
         const { data: insertedData, error } = await supabase
           .from('appointments')
           .insert({
             ...payload,
-            patient_phone: normalizedPhone
+            patient_phone: normalizedPhone,
+            queue_code: computedQueueCode
           })
           .select();
 
@@ -618,6 +653,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         // Trigger Next.js API route as a secure bridge for WhatsApp notification
         try {
           const bookingId = insertedData && insertedData.length > 0 ? insertedData[0].id : '';
+          const computedQueueCode = getQueueCode(date, time, scheduleConfig);
           fetch('/api/public/whatsapp', {
             method: 'POST',
             headers: {
@@ -640,6 +676,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 facility_address_en: selectedFacility.addressEn || getFacilityAddrEn(selectedFacility.address),
                 facility_map_url: selectedFacility.mapUrl,
                 booking_id: bookingId,
+                queue_code: computedQueueCode,
                 language: language,
                 locale: language
               }
@@ -665,6 +702,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       throw new Error("No active doctor profile found to book appointment.");
     }
 
+    const computedQueueCode = getQueueCode(date, time, scheduleConfig);
     const newBooking: PatientBooking = {
       id: bookedId,
       patientName: name,
@@ -676,7 +714,8 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       createdAt: new Date().toISOString(),
       facilityName: language === 'ar' ? selectedFacility.name : selectedFacility.nameEn,
       facilityMapUrl: selectedFacility.mapUrl,
-      facilityAddress: language === 'ar' ? selectedFacility.address : selectedFacility.addressEn
+      facilityAddress: language === 'ar' ? selectedFacility.address : selectedFacility.addressEn,
+      queue_code: computedQueueCode
     };
 
     // Save active booking details for rescheduling banner (separate from grid calculations)
@@ -725,11 +764,13 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const { createClient } = await import('@/lib/supabase/client');
         const supabase = createClient();
 
+        const computedQueueCode = getQueueCode(newDate, newTime, scheduleConfig);
         // Audit fields prep
         let updateData: any = {
           appointment_date: newDate,
           appointment_time: newTime,
-          status: newStatus
+          status: newStatus,
+          queue_code: computedQueueCode
         };
 
         if (clinicUser) {
@@ -748,12 +789,14 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (error) {
           // Graceful fallback for missing columns
           if (error.code === '42703' || error.code === 'PGRST204' || error.message?.includes('schema cache')) {
+            const computedQueueCode = getQueueCode(newDate, newTime, scheduleConfig);
             const fallbackResult = await supabase
               .from('appointments')
               .update({
                 appointment_date: newDate,
                 appointment_time: newTime,
-                status: newStatus
+                status: newStatus,
+                queue_code: computedQueueCode
               })
               .eq('id', bookingId);
             if (fallbackResult.error) throw fallbackResult.error;
@@ -795,6 +838,8 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
               facility_address_en: selectedFacility.addressEn || getFacilityAddrEn(selectedFacility.address),
               facility_map_url: selectedFacility.mapUrl,
               booking_id: bookingId,
+              queue_code: computedQueueCode,
+              old_queue_code: bookingToMove.queue_code,
               rescheduled_by: rescheduledBy,
               performed_by_role: clinicUser ? clinicUser.role : 'patient',
               performed_by_name: clinicUser ? clinicUser.full_name : bookingToMove.patientName,
@@ -838,6 +883,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const newFacilityName = language === 'ar' ? selectedFacility.name : selectedFacility.nameEn;
     const newFacilityMapUrl = selectedFacility.mapUrl;
 
+    const computedQueueCode = getQueueCode(newDate, newTime, scheduleConfig);
     const updatedBooking = {
       ...bookingToMove,
       date: newDate,
@@ -847,7 +893,8 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       facilityMapUrl: newFacilityMapUrl,
       facilityAddress: language === 'ar' ? selectedFacility.address : selectedFacility.addressEn,
       rescheduled_by: clinicUser ? `${clinicUser.full_name} (${clinicUser.role})` : 'patient',
-      rescheduled_at: new Date().toISOString()
+      rescheduled_at: new Date().toISOString(),
+      queue_code: computedQueueCode
     };
     
     // Only update activeBooking localStorage if this was the active booking
@@ -970,6 +1017,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                  facility_address_en: facility.addressEn || getFacilityAddrEn(facility.address),
                  facility_map_url: facility.mapUrl,
                  booking_id: data.id,
+                 queue_code: data.queue_code,
                  cancelled_by: data.cancelled_by || cancelledBy,
                  performed_by_role: clinicUser ? clinicUser.role : 'patient',
                  performed_by_name: clinicUser ? clinicUser.full_name : data.patient_name,
@@ -1333,7 +1381,8 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           cancelled_by: appt.cancelled_by,
           cancelled_at: appt.cancelled_at,
           rescheduled_by: appt.rescheduled_by,
-          rescheduled_at: appt.rescheduled_at
+          rescheduled_at: appt.rescheduled_at,
+          queue_code: appt.queue_code
         };
         setActiveBooking(foundActive);
         saveActiveId(appt.id);

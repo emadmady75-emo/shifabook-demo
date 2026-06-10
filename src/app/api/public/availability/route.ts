@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     // Query appointments filtered by doctor_id, date range, and status not cancelled
     const query = supabase
       .from('appointments')
-      .select('appointment_date, appointment_time, status, doctor_id')
+      .select('id, appointment_date, appointment_time, status, doctor_id, queue_code')
       .eq('doctor_id', doctorId)
       .gte('appointment_date', start)
       .lte('appointment_date', end)
