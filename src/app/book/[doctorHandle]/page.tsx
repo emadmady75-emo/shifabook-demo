@@ -8,7 +8,7 @@ import DaySelector from '@/components/booking/DaySelector';
 import BookingGrid from '@/components/booking/BookingGrid';
 import BookingModal from '@/components/booking/BookingModal';
 import RescheduleAlert from '@/components/booking/RescheduleAlert';
-import { useBooking, PatientBooking, DEMO_FACILITIES, getActorArabicLabel } from '@/components/BookingContext';
+import { useBooking, PatientBooking, getActorArabicLabel } from '@/components/BookingContext';
 import { formatDateOnly } from '@/lib/dates';
 
 export default function DoctorPublicBookingPage() {
@@ -186,49 +186,34 @@ export default function DoctorPublicBookingPage() {
               {/* Day Date & Branch Selector */}
               <div className="lg:col-span-4 lg:sticky lg:top-24">
                 <div className="glass-panel rounded-3xl p-6 border border-teal-500/20">
-                  {/* Branch Selector */}
+                  {/* Clinic Location Info */}
                   <div className="mb-6 pb-6 border-b border-teal-500/10">
-                    <label className="block text-sm font-bold text-slate-300 mb-2">
-                      {isAr ? 'اختر فرع العيادة' : 'Select Clinic Branch'}
+                    <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">
+                      {isAr ? 'مقر العيادة' : 'Clinic Location'}
                     </label>
-                    <div className="relative">
-                      <select
-                        value={selectedFacility.id}
-                        onChange={(e) => {
-                          const found = DEMO_FACILITIES.find(f => f.id === e.target.value);
-                          if (found) setSelectedFacility(found);
-                        }}
-                        className="w-full bg-slate-900/80 border border-teal-500/30 text-white rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-teal-400 transition-colors appearance-none cursor-pointer"
-                      >
-                        {DEMO_FACILITIES.map(fac => (
-                          <option key={fac.id} value={fac.id} className="bg-slate-950 text-white">
-                            {isAr ? fac.name : fac.nameEn}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-teal-400">
-                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                          <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
-                        </svg>
+                    <div className="p-4 rounded-2xl bg-teal-950/10 border border-teal-900/20 text-right space-y-1.5">
+                      <p className="text-sm font-bold text-teal-300">
+                        {isAr ? selectedFacility.name : selectedFacility.nameEn}
+                      </p>
+                      
+                      {/* Address and Google Maps Link */}
+                      <div className="flex items-center justify-between text-xs text-slate-400 pt-1 border-t border-teal-950/40">
+                        <span>
+                          {isAr ? selectedFacility.address : selectedFacility.addressEn}
+                        </span>
+                        <a
+                          href={selectedFacility.mapUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-teal-400 hover:text-teal-300 flex items-center gap-1 font-semibold"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                          {isAr ? 'عرض الخريطة' : 'View Map'}
+                        </a>
                       </div>
-                    </div>
-                    {/* Address and Google Maps Link */}
-                    <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
-                      <span>
-                        {isAr ? selectedFacility.address : selectedFacility.addressEn}
-                      </span>
-                      <a
-                        href={selectedFacility.mapUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-teal-400 hover:text-teal-300 flex items-center gap-1 font-semibold"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        {isAr ? 'عرض الخريطة' : 'View Map'}
-                      </a>
                     </div>
                   </div>
 

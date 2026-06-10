@@ -15,7 +15,12 @@ import { formatDateOnly, parseDateOnlySafe } from '@/lib/dates';
 export type { Facility, DoctorProfile, ScheduleConfig };
 
 // Constant re-exports for backward compatibility
-export const DEMO_FACILITIES = EGYPTIAN_FACILITIES;
+// For Phase 1, keep ShifaBook single-clinic only.
+// TODO: Phase 2 Multi-Clinic Roadmap:
+// - Create 'facilities' database table to store per-branch configurations
+// - Support per-branch doctor schedule configurations
+// - Implement validator to prevent overlapping doctor appointments across branches
+export const DEMO_FACILITIES = [EGYPTIAN_FACILITIES[0]];
 
 export interface PatientBooking {
   id: string;
@@ -197,6 +202,20 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setSelectedFacilityState(fac);
     localStorage.setItem('shifabook_facility', JSON.stringify(fac));
   };
+
+  // Keep selectedFacility dynamically synchronized with Settings (Profile Settings) clinic name & city
+  useEffect(() => {
+    if (doctorProfile) {
+      setSelectedFacilityState({
+        id: '8c9cbe7d-f421-4f10-9118-2e0618037ea4', // Stable facility ID matching first demo branch
+        name: doctorProfile.hospital || 'فرع المهندسين - الجيزة',
+        nameEn: doctorProfile.hospitalEn || 'Mohandessin Branch - Giza',
+        address: doctorProfile.city ? `فرع ${doctorProfile.city}` : 'شارع جامعة الدول العربية، المهندسين',
+        addressEn: doctorProfile.city ? `${doctorProfile.city} Branch` : 'Jamiat Al Dowal Al Arabiya Street, Mohandessin',
+        mapUrl: 'https://maps.google.com/?q=' + encodeURIComponent(doctorProfile.hospital || 'Mohandessin Branch - Giza')
+      });
+    }
+  }, [doctorProfile]);
 
   const fetchProfile = async () => {
     setIsLoadingProfile(true);
