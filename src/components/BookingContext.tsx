@@ -115,6 +115,8 @@ export interface PatientBooking {
   rescheduled_by?: string | null;
   rescheduled_at?: string | null;
   queue_code?: string | null;
+  appointment_type?: 'regular' | 'follow_up';
+  parent_appointment_id?: string | null;
 }
 
 const DOCTOR_NAME_EN_MAP: Record<string, string> = {
@@ -200,10 +202,20 @@ export interface ScheduleException {
   created_at: string;
 }
 
+export interface FollowUpOptions {
+  parentAppointmentId: string;
+  patientName: string;
+  patientPhone: string;
+  date: string;
+  timeSlot: string;
+  fee: number;
+  note?: string;
+}
+
 export interface WhatsAppEvent {
   id: string;
   timestamp: string;
-  type: 'booking.created' | 'booking.confirmed' | 'booking.reminder_24h' | 'booking.cancelled';
+  type: 'booking.created' | 'booking.confirmed' | 'booking.reminder_24h' | 'booking.cancelled' | 'booking.followup_created';
   patientName: string;
   phone: string;
   message: string;
@@ -266,6 +278,8 @@ interface BookingContextType {
   isExceptionsTableActive: boolean;
   createBlockedSlots: (slots: { timeSlot: string; reason: string | null; isRecurring: boolean; weekday: number | null }[], dateStr: string) => Promise<void>;
   deleteBlockedSlot: (exceptionId: string) => Promise<void>;
+  bookFollowUpAppointment: (options: FollowUpOptions) => Promise<PatientBooking>;
+  getFollowUpChain: (appointmentId: string) => PatientBooking[];
 }
 
 const BookingContext = createContext<BookingContextType | undefined>(undefined);
@@ -694,6 +708,8 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             rescheduled_by: appt.rescheduled_by,
             rescheduled_at: appt.rescheduled_at,
             queue_code: appt.queue_code,
+            appointment_type: appt.appointment_type || 'regular',
+            parent_appointment_id: appt.parent_appointment_id || null,
           }));
           setBookings(mapped);
         }
@@ -916,6 +932,233 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     triggerMockWhatsAppEvent('booking.created', newBooking);
 
     return newBooking;
+  };
+
+  const bookFollowUpAppointment = async (options: FollowUpOptions): Promise<PatientBooking> => {
+    const { parentAppointmentId, patientName, patientPhone, date, timeSlot, fee, note } = options;
+
+    // Role enforcement: Only admin, supervisor, doctor, reception can create follow-ups
+    if (clinicUser && !['admin', 'supervisor', 'reception'].includes(clinicUser.role)) {
+      const errorMsg = language === 'ar' ? "ليس لديك صلاحية لتنفيذ هذا الإجراء." : "You do not have permission to perform this action.";
+      throw new Error(errorMsg);
+    }
+
+    // Guard: Check if slot is blocked
+    const isSlotBlocked = scheduleExceptions.some(exc => {
+      if (exc.slot_time !== timeSlot) return false;
+      if (exc.is_recurring_weekly) {
+        const targetDate = parseDateOnlySafe(date);
+        return exc.weekday === targetDate.getDay();
+      } else {
+        return exc.exception_date === date;
+      }
+    });
+
+    if (isSlotBlocked) {
+      throw new Error(
+        language === 'ar'
+          ? "هذا الموعد غير متاح للحجز (تم إيقافه من قبل إدارة العيادة)."
+          : "This slot is unavailable for booking (blocked by clinic administration)."
+      );
+    }
+
+    const doctorId = doctorProfile?.id || null;
+    if (!doctorId) {
+      throw new Error("No active doctor profile found to book follow-up appointment.");
+    }
+
+    // Check slot capacity
+    const slotsOnDate = generateTimeSlotsForDate(date);
+    const targetSlot = slotsOnDate.find(s => s.time === timeSlot);
+    if (targetSlot && targetSlot.isBooked) {
+      throw new Error(
+        language === 'ar'
+          ? "هذا الموعد ممتلئ بالفعل. يرجى اختيار موعد آخر."
+          : "This slot is already full. Please choose another time."
+      );
+    }
+
+    let bookedId = '';
+    const { createClient } = await import('@/lib/supabase/client');
+    const supabase = createClient();
+    const { normalizePhone } = await import('@/lib/phone');
+    const normalizedPhone = normalizePhone(patientPhone);
+
+    const computedQueueCode = getQueueCode(date, timeSlot, scheduleConfig);
+
+    const payload = {
+      doctor_id: doctorId,
+      patient_name: patientName,
+      patient_phone: normalizedPhone,
+      appointment_date: date,
+      appointment_time: timeSlot,
+      status: 'pending',
+      source: 'web',
+      consultation_fee_at_booking: fee,
+      appointment_type: 'follow_up',
+      parent_appointment_id: parentAppointmentId,
+      queue_code: computedQueueCode
+    };
+
+    const { data: insertedData, error } = await supabase
+      .from('appointments')
+      .insert(payload)
+      .select();
+
+    if (error) {
+      // Graceful fallback if follow-up columns don't exist yet
+      if (error.code === '42703' || error.code === 'PGRST204' || error.message?.includes('schema cache')) {
+        const fallbackPayload = {
+          doctor_id: doctorId,
+          patient_name: patientName,
+          patient_phone: normalizedPhone,
+          appointment_date: date,
+          appointment_time: timeSlot,
+          status: 'pending',
+          source: 'web',
+          consultation_fee_at_booking: fee,
+          queue_code: computedQueueCode
+        };
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('appointments')
+          .insert(fallbackPayload)
+          .select();
+        if (fallbackError) throw new Error(fallbackError.message || 'Failed to insert follow-up appointment');
+        if (fallbackData && fallbackData[0]) {
+          bookedId = fallbackData[0].id;
+        } else {
+          bookedId = crypto.randomUUID();
+        }
+      } else if (error.code === '23505') {
+        throw new Error(
+          language === 'ar'
+            ? "هذا الموعد تم حجزه بالفعل، من فضلك اختر موعدًا آخر"
+            : "This slot is already booked. Please choose another time."
+        );
+      } else {
+        throw new Error(error.message || 'Failed to insert follow-up appointment');
+      }
+    } else if (insertedData && insertedData[0]) {
+      bookedId = insertedData[0].id;
+    } else {
+      bookedId = crypto.randomUUID();
+    }
+
+    // Trigger WhatsApp notification for follow-up
+    try {
+      const formattedTime = formatTimeHelper(timeSlot, language);
+      const feeLabel = fee === 0
+        ? (language === 'ar' ? 'مجاني' : 'Free')
+        : `${fee} ${language === 'ar' ? 'جنيه' : 'EGP'}`;
+
+      const docNameAr = doctorProfile.name;
+      const docNameEn = getDoctorNameEn(doctorProfile.name);
+
+      const followUpMessage = language === 'en'
+        ? `Hello ${patientName} 👋\n\nA follow-up appointment has been booked for you at ShifaBook.\n\nDoctor: ${docNameEn}\nDate: ${date}\nTime: ${formattedTime}\nQueue Number: ${computedQueueCode}\nFee: ${feeLabel}\n${note ? `Note: ${note}\n` : ''}\nClinic: ${selectedFacility.nameEn}\nAddress: ${selectedFacility.addressEn}\nLocation:\n${selectedFacility.mapUrl}\n\nThis is a follow-up visit for your previous appointment.\n\nThank you for using ShifaBook.`
+        : `مرحباً ${patientName} 👋\n\nتم حجز موعد متابعة لك في شفاء بوك.\n\n👨⚕️ الطبيب: ${docNameAr}\n📅 التاريخ: ${date}\n⏰ الوقت: ${formattedTime}\nرقم الدور: ${computedQueueCode}\n💰 قيمة الكشف: ${feeLabel}\n${note ? `📝 ملاحظة: ${note}\n` : ''}\n📍 العيادة: ${selectedFacility.name}\nالعنوان: ${selectedFacility.address}\n🗺️ اللوكيشن:\n${selectedFacility.mapUrl}\n\nهذا موعد متابعة لزيارتك السابقة.\n\nشكراً لاستخدامك شفاء بوك.`;
+
+      const waPayload = {
+        event_type: 'booking.followup_created',
+        data: {
+          patient_name: patientName,
+          patient_phone: patientPhone,
+          doctor_name: docNameAr,
+          doctor_name_en: docNameEn,
+          specialization: doctorProfile.specialization,
+          specialization_en: getDoctorSpecEn(doctorProfile.specialization),
+          appointment_date: date,
+          appointment_time: timeSlot,
+          facility_name: selectedFacility.name,
+          facility_name_en: selectedFacility.nameEn || getFacilityNameEn(selectedFacility.name),
+          facility_address: selectedFacility.address,
+          facility_address_en: selectedFacility.addressEn || getFacilityAddrEn(selectedFacility.address),
+          facility_map_url: selectedFacility.mapUrl,
+          booking_id: bookedId,
+          parent_appointment_id: parentAppointmentId,
+          queue_code: computedQueueCode,
+          consultation_fee: fee,
+          note: note || '',
+          message: followUpMessage,
+          language: language,
+          locale: language
+        }
+      };
+
+      console.log('[CLIENT_WHATSAPP_EVENT]', waPayload);
+
+      fetch('/api/public/whatsapp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(waPayload)
+      }).catch(err => {
+        console.error('Non-blocking WhatsApp API follow-up trigger error:', err);
+      });
+    } catch (webhookErr) {
+      console.error('Error invoking WhatsApp API follow-up trigger:', webhookErr);
+    }
+
+    const newBooking: PatientBooking = {
+      id: bookedId,
+      patientName: patientName,
+      mobileNumber: patientPhone,
+      date,
+      timeSlot,
+      status: 'pending',
+      price: fee,
+      createdAt: new Date().toISOString(),
+      facilityName: language === 'ar' ? selectedFacility.name : selectedFacility.nameEn,
+      facilityMapUrl: selectedFacility.mapUrl,
+      facilityAddress: language === 'ar' ? selectedFacility.address : selectedFacility.addressEn,
+      queue_code: computedQueueCode,
+      appointment_type: 'follow_up',
+      parent_appointment_id: parentAppointmentId
+    };
+
+    // Refresh appointments immediately
+    await refreshAppointments();
+
+    return newBooking;
+  };
+
+  const getFollowUpChain = (appointmentId: string): PatientBooking[] => {
+    // Find the root appointment by traversing up the parent chain
+    let rootId = appointmentId;
+    let current = bookings.find(b => b.id === appointmentId);
+    while (current?.parent_appointment_id) {
+      const parent = bookings.find(b => b.id === current!.parent_appointment_id);
+      if (parent) {
+        rootId = parent.id;
+        current = parent;
+      } else {
+        break;
+      }
+    }
+
+    // Collect all appointments in the chain
+    const chain: PatientBooking[] = [];
+    const root = bookings.find(b => b.id === rootId);
+    if (root) chain.push(root);
+
+    // BFS to find all children
+    const queue = [rootId];
+    const visited = new Set<string>([rootId]);
+    while (queue.length > 0) {
+      const parentId = queue.shift()!;
+      const children = bookings.filter(b => b.parent_appointment_id === parentId && !visited.has(b.id));
+      for (const child of children) {
+        chain.push(child);
+        visited.add(child.id);
+        queue.push(child.id);
+      }
+    }
+
+    // Sort chronologically
+    return chain.sort((a, b) => {
+      const dateCompare = a.date.localeCompare(b.date);
+      if (dateCompare !== 0) return dateCompare;
+      return a.timeSlot.localeCompare(b.timeSlot);
+    });
   };
 
   const rescheduleAppointment = async (
@@ -1804,7 +2047,9 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         scheduleExceptions,
         isExceptionsTableActive,
         createBlockedSlots,
-        deleteBlockedSlot
+        deleteBlockedSlot,
+        bookFollowUpAppointment,
+        getFollowUpChain
       }}
     >
       {children}

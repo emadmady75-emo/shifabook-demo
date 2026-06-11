@@ -29,6 +29,8 @@ export interface SupabaseAppointment {
   source: string;
   created_at: string;
   consultation_fee_at_booking?: number | null;
+  appointment_type?: string;
+  parent_appointment_id?: string | null;
 }
 
 export default async function DoctorDashboardPage() {

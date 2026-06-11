@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { useBooking, PatientBooking, WhatsAppEvent, getQueueCode } from '../BookingContext';
+import { useBooking, PatientBooking, WhatsAppEvent, getQueueCode, FollowUpOptions } from '../BookingContext';
 import { formatDateOnly } from '@/lib/dates';
 
 export default function AppointmentsList() {
@@ -16,7 +16,10 @@ export default function AppointmentsList() {
     rescheduleAppointment, 
     generateTimeSlotsForDate, 
     scheduleConfig,
-    clinicUser
+    clinicUser,
+    bookFollowUpAppointment,
+    getFollowUpChain,
+    doctorProfile
   } = useBooking();
   const isAr = language === 'ar';
 
@@ -25,6 +28,79 @@ export default function AppointmentsList() {
   const [selectedRescheduleTime, setSelectedRescheduleTime] = React.useState<string | null>(null);
   const [rescheduleLoading, setRescheduleLoading] = React.useState(false);
   const [rescheduleError, setRescheduleError] = React.useState('');
+
+  // Follow-Up Modal State
+  const [followUpParent, setFollowUpParent] = React.useState<PatientBooking | null>(null);
+  const [followUpDate, setFollowUpDate] = React.useState<string>('');
+  const [followUpTime, setFollowUpTime] = React.useState<string | null>(null);
+  const [followUpFeeMode, setFollowUpFeeMode] = React.useState<'free' | 'discounted' | 'full'>('free');
+  const [followUpCustomFee, setFollowUpCustomFee] = React.useState<string>('');
+  const [followUpNote, setFollowUpNote] = React.useState<string>('');
+  const [followUpLoading, setFollowUpLoading] = React.useState(false);
+  const [followUpError, setFollowUpError] = React.useState('');
+  const [followUpSuccess, setFollowUpSuccess] = React.useState(false);
+
+  // Timeline popover state
+  const [timelineApptId, setTimelineApptId] = React.useState<string | null>(null);
+
+  const handleOpenFollowUp = (appt: PatientBooking) => {
+    setFollowUpParent(appt);
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    setFollowUpDate(formatDateOnly(tomorrow));
+    setFollowUpTime(null);
+    setFollowUpFeeMode('free');
+    setFollowUpCustomFee('');
+    setFollowUpNote('');
+    setFollowUpError('');
+    setFollowUpSuccess(false);
+  };
+
+  const getFollowUpFee = (): number => {
+    if (followUpFeeMode === 'free') return 0;
+    if (followUpFeeMode === 'full') return doctorProfile?.consultationFee ?? 0;
+    const parsed = parseFloat(followUpCustomFee);
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
+  const handleFollowUpSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!followUpParent || !followUpTime) return;
+
+    setFollowUpLoading(true);
+    setFollowUpError('');
+
+    try {
+      const options: FollowUpOptions = {
+        parentAppointmentId: followUpParent.id,
+        patientName: followUpParent.patientName,
+        patientPhone: followUpParent.mobileNumber,
+        date: followUpDate,
+        timeSlot: followUpTime,
+        fee: getFollowUpFee(),
+        note: followUpNote || undefined
+      };
+
+      await bookFollowUpAppointment(options);
+      setFollowUpSuccess(true);
+
+      // Auto-close after brief delay
+      setTimeout(() => {
+        setFollowUpParent(null);
+        setFollowUpSuccess(false);
+      }, 2000);
+    } catch (err: any) {
+      setFollowUpError(err?.message || (isAr ? 'حدث خطأ أثناء حجز المتابعة' : 'Failed to book follow-up'));
+    } finally {
+      setFollowUpLoading(false);
+    }
+  };
+
+  const showFollowUpBtn = (appt: PatientBooking) => appt.status === 'attended' && (!clinicUser || ['admin', 'supervisor', 'reception'].includes(clinicUser.role));
+
+  const hasFollowUpLink = (appt: PatientBooking) => {
+    return appt.appointment_type === 'follow_up' || bookings.some(b => b.parent_appointment_id === appt.id);
+  };
 
   const handleOpenReschedule = (appt: PatientBooking) => {
     setReschedulingBooking(appt);
@@ -281,8 +357,48 @@ export default function AppointmentsList() {
                       </span>
                     </td>
                     <td className="py-4">
-                      <div className="font-bold text-white">{appt.patientName}</div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-white">{appt.patientName}</span>
+                        {appt.appointment_type === 'follow_up' && (
+                          <span
+                            className="px-1.5 py-0.5 rounded-md bg-cyan-500/10 text-cyan-400 text-[9px] border border-cyan-500/20 font-bold whitespace-nowrap"
+                            title={isAr ? `متابعة لموعد سابق` : `Follow-up appointment`}
+                          >
+                            {isAr ? 'متابعة' : 'Follow-Up'}
+                          </span>
+                        )}
+                        {hasFollowUpLink(appt) && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setTimelineApptId(timelineApptId === appt.id ? null : appt.id); }}
+                            className="p-0.5 rounded hover:bg-teal-950/30 transition-colors relative"
+                            title={isAr ? 'عرض سلسلة المواعيد' : 'View appointment chain'}
+                          >
+                            <svg className="w-3.5 h-3.5 text-cyan-400/70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
                       <div className="text-xs text-slate-400">{appt.mobileNumber}</div>
+                      {/* Timeline Popover */}
+                      {timelineApptId === appt.id && (
+                        <div className="absolute z-40 mt-1 p-3 rounded-xl bg-[#09151e] border border-cyan-500/20 shadow-xl min-w-[220px] max-w-[280px] animate-in fade-in zoom-in-95 duration-150">
+                          <div className="text-[10px] font-bold text-cyan-400 mb-2 border-b border-cyan-950/40 pb-1">
+                            {isAr ? 'سلسلة المواعيد المرتبطة' : 'Linked Appointment Chain'}
+                          </div>
+                          <div className="space-y-1.5 max-h-[150px] overflow-y-auto custom-scrollbar">
+                            {getFollowUpChain(appt.id).map((chainAppt, idx) => (
+                              <div key={chainAppt.id} className={`flex items-center gap-2 text-[10px] p-1.5 rounded-lg ${chainAppt.id === appt.id ? 'bg-cyan-500/10 border border-cyan-500/20' : 'bg-slate-950/30'}`}>
+                                <span className="font-mono text-cyan-400 font-bold min-w-[32px]">{chainAppt.queue_code || '—'}</span>
+                                <span className="text-slate-300">{chainAppt.date}</span>
+                                <span className="text-slate-400">{formatPeriodTime(chainAppt.timeSlot)}</span>
+                                {chainAppt.appointment_type === 'follow_up' && <span className="text-cyan-400 text-[8px]">{isAr ? 'متابعة' : 'F/U'}</span>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </td>
                     <td className="py-4">{appt.date}</td>
                     <td className="py-4 text-teal-300 font-bold">
@@ -321,6 +437,14 @@ export default function AppointmentsList() {
                             className="px-3 py-1.5 rounded-lg bg-teal-500/10 text-teal-400 border border-teal-950 hover:bg-[#0d2a2f] hover:text-teal-350 text-xs transition-colors font-semibold"
                           >
                             {isAr ? 'نقل الموعد' : 'Reschedule'}
+                          </button>
+                        )}
+                        {showFollowUpBtn(appt) && (
+                          <button
+                            onClick={() => handleOpenFollowUp(appt)}
+                            className="px-3 py-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-950 hover:bg-cyan-950/40 text-xs transition-colors font-semibold"
+                          >
+                            {isAr ? 'حجز متابعة' : 'Follow-Up'}
                           </button>
                         )}
                         {showCancelBtn(appt) && (
@@ -540,8 +664,254 @@ export default function AppointmentsList() {
               </div>
             </form>
           </div>
+         </div>
+       )}
+
+    {/* Follow-Up Creation Modal */}
+    {followUpParent && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 text-right" dir="rtl">
+        {/* Dark glass backdrop */}
+        <div onClick={() => !followUpLoading && setFollowUpParent(null)} className="absolute inset-0 bg-[#04080b]/95 backdrop-blur-md" />
+
+        {/* Modal Container */}
+        <div className="relative w-full max-w-lg glass-panel rounded-3xl overflow-hidden shadow-2xl z-10 border border-cyan-500/20 text-right animate-in fade-in zoom-in-95 duration-200">
+
+          {/* Header */}
+          <div className="p-5 border-b border-cyan-950/60 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => !followUpLoading && setFollowUpParent(null)}
+              className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-900 transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <h3 className="text-lg font-black text-white">
+              {isAr ? 'حجز موعد متابعة' : 'Book Follow-Up Appointment'}
+            </h3>
+          </div>
+
+          {/* Success State */}
+          {followUpSuccess ? (
+            <div className="p-8 text-center space-y-4">
+              <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mx-auto">
+                <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h4 className="text-white font-bold text-lg">
+                {isAr ? 'تم حجز موعد المتابعة بنجاح!' : 'Follow-Up Booked Successfully!'}
+              </h4>
+              <p className="text-sm text-slate-400">
+                {isAr ? 'تم إرسال إشعار واتساب للمريض.' : 'WhatsApp notification sent to patient.'}
+              </p>
+            </div>
+          ) : (
+            /* Form Content */
+            <form onSubmit={handleFollowUpSubmit} className="p-6 space-y-5">
+              {followUpError && (
+                <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs font-bold text-rose-400 text-center">
+                  ⚠️ {followUpError}
+                </div>
+              )}
+
+              {/* Parent Appointment Summary */}
+              <div className="p-4 rounded-2xl bg-[#09151e] border border-cyan-950/60 space-y-2 text-xs sm:text-sm text-slate-300">
+                <div className="flex justify-between items-center pb-2 border-b border-cyan-950/20">
+                  <span className="text-slate-500">{isAr ? 'اسم المريض:' : 'Patient:'}</span>
+                  <span className="font-bold text-white">{followUpParent.patientName}</span>
+                </div>
+                <div className="flex justify-between items-center pb-2 border-b border-cyan-950/20">
+                  <span className="text-slate-500">{isAr ? 'الموعد الأصلي:' : 'Original Appointment:'}</span>
+                  <span className="font-mono text-cyan-400 font-bold">
+                    {followUpParent.date} | {formatPeriodTime(followUpParent.timeSlot)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500">{isAr ? 'رمز الدور الأصلي:' : 'Original Queue:'}</span>
+                  <span className="font-mono text-cyan-400 font-bold">
+                    {followUpParent.queue_code || '—'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Date Selector */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-300 block text-right">
+                  {isAr ? 'تاريخ موعد المتابعة:' : 'Follow-Up Date:'}
+                </label>
+                <select
+                  value={followUpDate}
+                  onChange={(e) => { setFollowUpDate(e.target.value); setFollowUpTime(null); }}
+                  className="w-full bg-[#09151e] border border-cyan-950 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500 transition-colors cursor-pointer text-right font-bold"
+                >
+                  {rescheduleDays.map((date) => {
+                    const dateStr = formatDateOnly(date);
+                    const dayOfWeek = date.getDay();
+                    const isWorkingDay = scheduleConfig?.workingDays?.includes(dayOfWeek) ?? true;
+                    return (
+                      <option key={dateStr} value={dateStr} disabled={!isWorkingDay} className="bg-slate-950 text-white">
+                        {dateStr} - {getDayName(date)} ({isWorkingDay ? (isAr ? 'متاح' : 'Available') : (isAr ? 'مغلق' : 'Closed')})
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              {/* Time Slot Grid */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-300 block text-right">
+                  {isAr ? 'اختر وقت المتابعة:' : 'Select Follow-Up Time:'}
+                </label>
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[180px] overflow-y-auto p-1 custom-scrollbar border border-cyan-950 bg-[#060d13]/55 rounded-2xl" dir="ltr">
+                  {(() => {
+                    const slots = generateTimeSlotsForDate(followUpDate);
+                    if (slots.length === 0) {
+                      return (
+                        <div className="col-span-full text-center py-8 text-slate-500 text-xs">
+                          {isAr ? 'العيادة مغلقة هذا اليوم' : 'Clinic Closed'}
+                        </div>
+                      );
+                    }
+                    return slots.map((slot) => {
+                      const isSelected = followUpTime === slot.time;
+                      const isFull = slot.isBooked;
+                      const isExpired = slot.isExpired;
+                      const isBlocked = slot.isBlocked;
+                      let btnCls = '';
+                      if (isExpired) {
+                        btnCls = 'bg-slate-950/20 border-slate-900/20 text-slate-700 cursor-not-allowed opacity-35';
+                      } else if (isBlocked) {
+                        btnCls = 'bg-slate-900/40 border-slate-900 text-slate-500 cursor-not-allowed opacity-60';
+                      } else if (isFull) {
+                        btnCls = 'bg-rose-950/15 border-rose-900/50 text-rose-500/70 cursor-not-allowed';
+                      } else if (isSelected) {
+                        btnCls = 'bg-gradient-to-r from-cyan-500 to-teal-400 border-cyan-300 text-[#070e12] font-black scale-[1.02] shadow-md shadow-cyan-500/15';
+                      } else {
+                        btnCls = 'bg-[#09151e] border-cyan-950/60 text-slate-200 hover:border-cyan-500 hover:bg-cyan-950/20';
+                      }
+                      return (
+                        <button
+                          key={slot.time}
+                          type="button"
+                          disabled={isExpired || isFull || isBlocked}
+                          onClick={() => setFollowUpTime(slot.time)}
+                          title={isBlocked ? (isAr ? 'هذا الموعد غير متاح' : 'This slot is unavailable') : undefined}
+                          className={`py-2.5 px-1.5 rounded-xl border flex flex-col items-center justify-center transition-all ${btnCls}`}
+                        >
+                          <span className="font-bold text-xs">{formatPeriodTime(slot.time)}</span>
+                          <span className="text-[8px] opacity-80 mt-0.5">
+                            {isBlocked ? (isAr ? 'غير متاح' : 'Unavailable') : isFull ? (isAr ? 'محجوز' : 'Full') : (isAr ? 'شاغر' : 'Free')}
+                          </span>
+                        </button>
+                      );
+                    });
+                  })()}
+                </div>
+              </div>
+
+              {/* Fee Selector */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-300 block text-right">
+                  {isAr ? 'قيمة الكشف:' : 'Consultation Fee:'}
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFollowUpFeeMode('free')}
+                    className={`py-2.5 px-2 rounded-xl border text-xs font-bold transition-all ${
+                      followUpFeeMode === 'free'
+                        ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400'
+                        : 'bg-[#09151e] border-slate-800 text-slate-400 hover:border-slate-600'
+                    }`}
+                  >
+                    {isAr ? 'مجاني (0)' : 'Free (0)'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFollowUpFeeMode('discounted')}
+                    className={`py-2.5 px-2 rounded-xl border text-xs font-bold transition-all ${
+                      followUpFeeMode === 'discounted'
+                        ? 'bg-amber-500/15 border-amber-500/40 text-amber-400'
+                        : 'bg-[#09151e] border-slate-800 text-slate-400 hover:border-slate-600'
+                    }`}
+                  >
+                    {isAr ? 'مخفض' : 'Discounted'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFollowUpFeeMode('full')}
+                    className={`py-2.5 px-2 rounded-xl border text-xs font-bold transition-all ${
+                      followUpFeeMode === 'full'
+                        ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-400'
+                        : 'bg-[#09151e] border-slate-800 text-slate-400 hover:border-slate-600'
+                    }`}
+                  >
+                    {isAr ? `كامل (${doctorProfile?.consultationFee ?? 0})` : `Full (${doctorProfile?.consultationFee ?? 0})`}
+                  </button>
+                </div>
+                {followUpFeeMode === 'discounted' && (
+                  <input
+                    type="number"
+                    min="0"
+                    value={followUpCustomFee}
+                    onChange={(e) => setFollowUpCustomFee(e.target.value)}
+                    placeholder={isAr ? 'أدخل المبلغ المخفض...' : 'Enter discounted amount...'}
+                    className="w-full bg-[#09151e] border border-amber-950/60 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-amber-500 transition-colors text-right"
+                  />
+                )}
+              </div>
+
+              {/* Note Field */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-300 block text-right">
+                  {isAr ? 'ملاحظة (اختياري):' : 'Note (optional):'}
+                </label>
+                <input
+                  type="text"
+                  value={followUpNote}
+                  onChange={(e) => setFollowUpNote(e.target.value)}
+                  placeholder={isAr ? 'مثال: مراجعة نتائج التحاليل' : 'e.g. Review lab results'}
+                  className="w-full bg-[#09151e] border border-cyan-950/60 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-cyan-500 transition-colors text-right"
+                />
+              </div>
+
+              {/* Fee Summary */}
+              <div className="p-3 rounded-xl bg-cyan-500/5 border border-cyan-500/10 flex justify-between items-center text-sm">
+                <span className="text-cyan-400 font-bold">
+                  {getFollowUpFee() === 0 ? (isAr ? 'مجاني' : 'Free') : `${getFollowUpFee()} ${isAr ? 'جنيه' : 'EGP'}`}
+                </span>
+                <span className="text-slate-400 text-xs">{isAr ? 'قيمة الكشف:' : 'Fee:'}</span>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-3 flex gap-3" dir="rtl">
+                <button
+                  type="button"
+                  onClick={() => setFollowUpParent(null)}
+                  disabled={followUpLoading}
+                  className="flex-1 py-3.5 rounded-xl border border-cyan-950/80 bg-transparent text-slate-300 font-bold text-sm hover:bg-slate-900 hover:text-white transition-colors disabled:opacity-50"
+                >
+                  {isAr ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  disabled={followUpLoading || !followUpTime}
+                  className="flex-[2] py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-teal-400 text-[#070e12] font-black text-sm hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-1.5 shadow-md shadow-cyan-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {followUpLoading ? (
+                    <div className="w-5 h-5 border-2 border-[#070e12] border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <span>{isAr ? 'تأكيد حجز المتابعة' : 'Confirm Follow-Up'}</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          )}
         </div>
-      )}
+      </div>
+    )}
     </>
   );
 }
