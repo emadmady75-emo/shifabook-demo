@@ -78,6 +78,26 @@ export const getQueueCode = (
   return `${prefix}01`;
 };
 
+export const getCleanMapUrl = (hospital: string): string => {
+  if (!hospital) return 'https://maps.google.com/?q=30.052,31.200';
+  if (hospital.startsWith('http://') || hospital.startsWith('https://')) {
+    return hospital;
+  }
+  const cleanHospital = hospital.trim();
+  if (
+    cleanHospital.includes('جامعة ٦ أكتوبر') ||
+    cleanHospital.includes('October 6') ||
+    cleanHospital.includes('المهندسين') ||
+    cleanHospital.includes('Mohandessin')
+  ) {
+    return 'https://maps.google.com/?q=30.052,31.200';
+  }
+  if (cleanHospital.includes('التجمع الخامس') || cleanHospital.includes('New Cairo')) {
+    return 'https://maps.google.com/?q=30.027,31.492';
+  }
+  return 'https://maps.google.com/?q=' + encodeURIComponent(cleanHospital);
+};
+
 export interface PatientBooking {
   id: string;
   patientName: string;
@@ -270,7 +290,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         nameEn: doctorProfile.hospitalEn || 'Mohandessin Branch - Giza',
         address: doctorProfile.city ? `فرع ${doctorProfile.city}` : 'شارع جامعة الدول العربية، المهندسين',
         addressEn: doctorProfile.city ? `${doctorProfile.city} Branch` : 'Jamiat Al Dowal Al Arabiya Street, Mohandessin',
-        mapUrl: 'https://maps.google.com/?q=' + encodeURIComponent(doctorProfile.hospital || 'Mohandessin Branch - Giza')
+        mapUrl: getCleanMapUrl(doctorProfile.hospital || 'Mohandessin Branch - Giza')
       });
     }
   }, [doctorProfile]);
@@ -813,11 +833,12 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           
           const docNameAr = doctorProfile.name;
           const docNameEn = getDoctorNameEn(doctorProfile.name);
+          const prevQueueCode = bookingToMove.queue_code || getQueueCode(bookingToMove.date, bookingToMove.timeSlot, scheduleConfig, bookings);
           const rescheduleMessage = language === 'en'
-            ? `Hello ${bookingToMove.patientName} 👋\n\nYour appointment has been rescheduled ${actorLabel} in ShifaBook.\n\nDoctor: ${docNameEn}\n\nPrevious appointment:\nDate: ${bookingToMove.date}\nTime: ${formatTimeHelper(bookingToMove.timeSlot, language)}\n\nNew appointment:\nDate: ${newDate}\nTime: ${formattedTime}\n\nClinic: ${selectedFacility.nameEn}\nAddress: ${selectedFacility.addressEn}\nLocation:\n${selectedFacility.mapUrl}\n\nWe look forward to seeing you at the new appointment.`
+            ? `Hello ${bookingToMove.patientName} 👋\n\nYour appointment has been rescheduled ${actorLabel} in ShifaBook.\n\nDoctor: ${docNameEn}\n\nPrevious appointment:\nDate: ${bookingToMove.date}\nTime: ${formatTimeHelper(bookingToMove.timeSlot, language)}\nPrevious Queue Number: ${prevQueueCode}\n\nNew appointment:\nDate: ${newDate}\nTime: ${formattedTime}\nNew Queue Number: ${computedQueueCode}\n\nClinic: ${selectedFacility.nameEn}\nAddress: ${selectedFacility.addressEn}\nLocation:\n${selectedFacility.mapUrl}\n\nWe look forward to seeing you at the new appointment.`
             : (actorLabel === "بناءً على طلبك"
-              ? `تم تعديل موعدك بناءً على طلبك.\nالموعد الجديد: ${newDate} - ${formattedTime}`
-              : `تم تعديل موعدك ${actorLabel}.\nالموعد الجديد: ${newDate} - ${formattedTime}`);
+              ? `تم تعديل موعدك بناءً على طلبك.\nالموعد الجديد: ${newDate} - ${formattedTime}\nرقم الدور الجديد: ${computedQueueCode}\nرقم الدور السابق: ${prevQueueCode}`
+              : `تم تعديل موعدك ${actorLabel}.\nالموعد الجديد: ${newDate} - ${formattedTime}\nرقم الدور الجديد: ${computedQueueCode}\nرقم الدور السابق: ${prevQueueCode}`);
 
           const payload = {
             event_type: 'booking.rescheduled',
@@ -995,10 +1016,10 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
              const docNameAr = doctorProfile.name;
              const docNameEn = getDoctorNameEn(doctorProfile.name);
              const cancelMessage = language === 'en'
-               ? `Hello ${data.patient_name} 👋\n\nYour appointment has been cancelled ${actorLabel} in ShifaBook.\n\nDoctor: ${docNameEn}\nDate: ${data.appointment_date}\nTime: ${formatTimeHelper(data.appointment_time, language)}\n\nClinic: ${facility.nameEn}\nAddress: ${facility.addressEn}\nLocation:\n${facility.mapUrl}\n\nYou can book a new appointment anytime through the booking page.\n\nThank you for using ShifaBook.`
+               ? `Hello ${data.patient_name} 👋\n\nYour appointment has been cancelled ${actorLabel} in ShifaBook.\n\nDoctor: ${docNameEn}\nDate: ${data.appointment_date}\nTime: ${formatTimeHelper(data.appointment_time, language)}\nQueue Number: ${data.queue_code || ''}\n\nClinic: ${facility.nameEn}\nAddress: ${facility.addressEn}\nLocation:\n${facility.mapUrl}\n\nYou can book a new appointment anytime through the booking page.\n\nThank you for using ShifaBook.`
                : (actorLabel === "بناءً على طلبك"
-                 ? "تم إلغاء موعدك بناءً على طلبك."
-                 : `تم إلغاء موعدك ${actorLabel}.`);
+                 ? `تم إلغاء موعدك بناءً على طلبك. رقم الدور الملغي: ${data.queue_code || ''}`
+                 : `تم إلغاء موعدك ${actorLabel}. رقم الدور الملغي: ${data.queue_code || ''}`);
 
              const payload = {
                event_type: 'booking.cancelled',
@@ -1290,8 +1311,8 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         patientName: b.patientName,
         phone: b.mobileNumber,
         message: language === 'ar' 
-          ? `مرحباً ${b.patientName} 👋\n\nتم تأكيد حجزك بنجاح في شفاء بوك.\n\n👨‍⚕️ الطبيب: ${docName}\n🩺 التخصص: ${spec}\n\n📅 التاريخ: ${b.date}\n⏰ الوقت: ${formattedSlotTime}\n\n📍 العيادة: ${b.facilityName || 'فرع المهندسين'}\nالعنوان: ${b.facilityAddress || 'شارع جامعة الدول العربية، المهندسين'}\n🗺️ اللوكيشن:\n${b.facilityMapUrl || 'https://maps.google.com/?q=30.052,31.200'}\n\nشكراً لاستخدامك شفاء بوك.`
-          : `Hello ${b.patientName} 👋\n\nYour appointment has been successfully confirmed at ShifaBook.\n\n👨‍⚕️ Doctor: ${docName}\n🩺 Specialty: ${spec}\n\n📅 Date: ${b.date}\n⏰ Time: ${formattedSlotTime}\n\n📍 Clinic: ${b.facilityName || 'Mohandessin Branch'}\nAddress: ${b.facilityAddress || ''}\n🗺️ Location Map:\n${b.facilityMapUrl || ''}\n\nThank you for using ShifaBook.`,
+          ? `مرحباً ${b.patientName} 👋\n\nتم تأكيد حجزك بنجاح في شفاء بوك.\n\n👨‍⚕️ الطبيب: ${docName}\n🩺 التخصص: ${spec}\n\n📅 التاريخ: ${b.date}\n⏰ الوقت: ${formattedSlotTime}\n\nرقم الدور: ${b.queue_code || getQueueCode(b.date, b.timeSlot, scheduleConfig, bookings)}\n\n📍 العيادة: ${b.facilityName || 'فرع المهندسين'}\nالعنوان: ${b.facilityAddress || 'شارع جامعة الدول العربية، المهندسين'}\n🗺️ اللوكيشن:\n${b.facilityMapUrl || 'https://maps.google.com/?q=30.052,31.200'}\n\nشكراً لاستخدامك شفاء بوك.`
+          : `Hello ${b.patientName} 👋\n\nYour appointment has been successfully confirmed at ShifaBook.\n\n👨‍⚕️ Doctor: ${docName}\n🩺 Specialty: ${spec}\n\n📅 Date: ${b.date}\n⏰ Time: ${formattedSlotTime}\nQueue Number: ${b.queue_code || getQueueCode(b.date, b.timeSlot, scheduleConfig, bookings)}\n\n📍 Clinic: ${b.facilityName || 'Mohandessin Branch'}\nAddress: ${b.facilityAddress || ''}\n🗺️ Location Map:\n${b.facilityMapUrl || ''}\n\nThank you for using ShifaBook.`,
         status: b.status === 'pending' ? 'sent' : 'replied'
       });
 
@@ -1313,8 +1334,8 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           patientName: b.patientName,
           phone: b.mobileNumber,
           message: language === 'ar'
-            ? `مرحباً ${b.patientName} 👋\n\n${actorLabel === "بناءً على طلبك" ? "تم تعديل موعدك بناءً على طلبك." : `تم تعديل موعدك ${actorLabel}.`}\nالموعد الجديد: ${b.date} - ${formattedTime}\n\n👨‍⚕️ الطبيب: ${docName}\n📍 العيادة: ${b.facilityName || 'فرع المهندسين'}\nالعنوان: ${b.facilityAddress || ''}\n🗺️ اللوكيشن:\n${b.facilityMapUrl || ''}\n\nنتشرف بحضورك في الموعد الجديد.`
-            : `Hello ${b.patientName} 👋\n\nYour appointment has been successfully rescheduled at ShifaBook.\n\n👨‍⚕️ Doctor: ${docName}\nNew Slot:\n📅 ${b.date}\n⏰ ${formattedTime}\n\n📍 Clinic: ${b.facilityName || ''}\nAddress: ${b.facilityAddress || ''}\n🗺️ Location Map:\n${b.facilityMapUrl || ''}\n\nLooking forward to seeing you at the new slot.`,
+            ? `مرحباً ${b.patientName} 👋\n\n${actorLabel === "بناءً على طلبك" ? "تم تعديل موعدك بناءً على طلبك." : `تم تعديل موعدك ${actorLabel}.`}\nالموعد الجديد: ${b.date} - ${formattedTime}\nرقم الدور الجديد: ${b.queue_code || getQueueCode(b.date, b.timeSlot, scheduleConfig, bookings)}\n\n👨‍⚕️ الطبيب: ${docName}\n📍 العيادة: ${b.facilityName || 'فرع المهندسين'}\nالعنوان: ${b.facilityAddress || ''}\n🗺️ اللوكيشن:\n${b.facilityMapUrl || ''}\n\nنتشرف بحضورك في الموعد الجديد.`
+            : `Hello ${b.patientName} 👋\n\nYour appointment has been successfully rescheduled at ShifaBook.\n\n👨‍⚕️ Doctor: ${docName}\nNew Slot:\n📅 ${b.date}\n⏰ ${formattedTime}\nNew Queue Number: ${b.queue_code || getQueueCode(b.date, b.timeSlot, scheduleConfig, bookings)}\n\n📍 Clinic: ${b.facilityName || ''}\nAddress: ${b.facilityAddress || ''}\n🗺️ Location Map:\n${b.facilityMapUrl || ''}\n\nLooking forward to seeing you at the new slot.`,
           status: 'read'
         });
       }
@@ -1336,8 +1357,8 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           patientName: b.patientName,
           phone: b.mobileNumber,
           message: language === 'ar'
-            ? `مرحباً ${b.patientName} 👋\n\n${actorLabel === "بناءً على طلبك" ? "تم إلغاء موعدك بناءً على طلبك." : `تم إلغاء موعدك ${actorLabel}.`}\n\n👨‍⚕️ الطبيب: ${docName}\n📅 التاريخ: ${b.date}\n⏰ الوقت: ${formattedSlotTime}\n\n📍 العيادة: ${b.facilityName || 'فرع المهندسين'}\nالعنوان: ${b.facilityAddress || ''}\n\nيمكنك حجز موعد جديد في أي وقت من خلال صفحة الحجز.\n\nشكراً لاستخدامك شفاء بوك.`
-            : `Hello ${b.patientName} 👋\n\nYour appointment has been cancelled at ShifaBook.\n\n👨‍⚕️ Doctor: ${docName}\n📅 Date: ${b.date}\n⏰ Time: ${formattedSlotTime}\n\n📍 Clinic: ${b.facilityName || ''}\nAddress: ${b.facilityAddress || ''}\n\nYou can book a new slot anytime via the booking page.\n\nThank you for using ShifaBook.`,
+            ? `مرحباً ${b.patientName} 👋\n\n${actorLabel === "بناءً على طلبك" ? "تم إلغاء موعدك بناءً على طلبك. رقم الدور الملغي: " + (b.queue_code || '') : `تم إلغاء موعدك ${actorLabel}. رقم الدور الملغي: ` + (b.queue_code || '')}\n\n👨‍⚕️ الطبيب: ${docName}\n📅 التاريخ: ${b.date}\n⏰ الوقت: ${formattedSlotTime}\n\n📍 العيادة: ${b.facilityName || 'فرع المهندسين'}\nالعنوان: ${b.facilityAddress || ''}\n\nيمكنك حجز موعد جديد في أي وقت من خلال صفحة الحجز.\n\nشكراً لاستخدامك شفاء بوك.`
+            : `Hello ${b.patientName} 👋\n\nYour appointment has been cancelled at ShifaBook.\n\n👨‍⚕️ Doctor: ${docName}\n📅 Date: ${b.date}\n⏰ Time: ${formattedSlotTime}\nQueue Number: ${b.queue_code || ''}\n\n📍 Clinic: ${b.facilityName || ''}\nAddress: ${b.facilityAddress || ''}\n\nYou can book a new slot anytime via the booking page.\n\nThank you for using ShifaBook.`,
           status: 'sent'
         });
       }

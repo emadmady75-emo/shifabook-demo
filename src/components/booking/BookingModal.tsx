@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useBooking, PatientBooking } from '../BookingContext';
+import { useBooking, PatientBooking, getQueueCode } from '../BookingContext';
 
 interface BookingModalProps {
   selectedDate: string;
@@ -31,7 +31,8 @@ export default function BookingModal({
     setPhoneVerified,
     phoneVerified,
     checkPhoneBookings,
-    activeBooking
+    activeBooking,
+    scheduleConfig
   } = useBooking();
 
   const isAr = language === 'ar';
@@ -81,11 +82,13 @@ export default function BookingModal({
       if (moved) {
         const updatedBooking = activeBooking || bookings.find(b => b.id === rescheduleBookingId);
         if (updatedBooking) {
+          const newCode = getQueueCode(selectedDate, selectedTime, scheduleConfig);
           onSuccess({
             ...updatedBooking,
             date: selectedDate,
             timeSlot: selectedTime,
-            status: 'confirmed'
+            status: 'confirmed',
+            queue_code: newCode
           });
         } else {
           onClose();
@@ -230,10 +233,12 @@ export default function BookingModal({
         if (moved) {
           const updatedBooking = bookings.find(b => b.id === rescheduleBookingId);
           if (updatedBooking) {
+            const newCode = getQueueCode(selectedDate, selectedTime, scheduleConfig);
             onSuccess({
               ...updatedBooking,
               date: selectedDate,
-              timeSlot: selectedTime
+              timeSlot: selectedTime,
+              queue_code: newCode
             });
           }
         } else {
