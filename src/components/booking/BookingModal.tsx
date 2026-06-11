@@ -179,7 +179,7 @@ export default function BookingModal({
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ phone: finalPhone })
+          body: JSON.stringify({ phone: finalPhone, doctorId: doctorProfile?.id })
         });
         const data = await res.json();
         

@@ -222,6 +222,16 @@ export interface WhatsAppEvent {
   status: 'sent' | 'delivered' | 'read' | 'replied';
 }
 
+export interface Clinic {
+  id: string;
+  name: string;
+  slug: string;
+  city: string | null;
+  address: string | null;
+  phone: string | null;
+  is_active: boolean;
+}
+
 export interface ClinicUser {
   id: string;
   email: string;
@@ -231,6 +241,7 @@ export interface ClinicUser {
   auth_user_id: string;
   created_at: string;
   password_reset_required?: boolean;
+  clinic_id?: string | null;
 }
 
 interface BookingContextType {
@@ -280,6 +291,9 @@ interface BookingContextType {
   deleteBlockedSlot: (exceptionId: string) => Promise<void>;
   bookFollowUpAppointment: (options: FollowUpOptions) => Promise<PatientBooking>;
   getFollowUpChain: (appointmentId: string) => PatientBooking[];
+  resolveDoctorByHandle: (handle: string) => Promise<boolean>;
+  clinic: Clinic | null;
+  clinicDoctors: DoctorProfile[];
 }
 
 const BookingContext = createContext<BookingContextType | undefined>(undefined);
@@ -309,6 +323,8 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [isLoadingAvailability, setIsLoadingAvailability] = useState(true);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [clinicUser, setClinicUser] = useState<ClinicUser | null>(null);
+  const [clinic, setClinic] = useState<Clinic | null>(null);
+  const [clinicDoctors, setClinicDoctors] = useState<DoctorProfile[]>([]);
   const [scheduleExceptions, setScheduleExceptions] = useState<ScheduleException[]>([]);
   const [isExceptionsTableActive, setIsExceptionsTableActive] = useState<boolean>(true);
 
@@ -447,31 +463,29 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, [doctorProfile]);
 
+  const mapDocRow = (doc: any): DoctorProfile => ({
+    id: doc.id,
+    name: doc.full_name,
+    nameEn: doc.full_name,
+    title: doc.specialization,
+    titleEn: doc.specialization,
+    specialization: doc.specialization,
+    specializationEn: doc.specialization,
+    avatar: doc.profile_image_url || INITIAL_DOCTOR.avatar,
+    hospital: doc.clinic_name,
+    hospitalEn: doc.clinic_name,
+    consultationFee: doc.consultation_fee,
+    city: doc.city,
+  });
+
   const fetchProfile = async () => {
     setIsLoadingProfile(true);
     try {
       const { createClient } = await import('@/lib/supabase/client');
       const supabase = createClient();
-      
-      const { data, error } = await supabase.from('doctors').select('*').limit(1);
-      if (!error && data && data.length > 0) {
-        const doc = data[0];
-        setDoctorProfile({
-          id: doc.id,
-          name: doc.full_name,
-          nameEn: doc.full_name,
-          title: doc.specialization,
-          titleEn: doc.specialization,
-          specialization: doc.specialization,
-          specializationEn: doc.specialization,
-          avatar: doc.profile_image_url || INITIAL_DOCTOR.avatar,
-          hospital: doc.clinic_name,
-          hospitalEn: doc.clinic_name,
-          consultationFee: doc.consultation_fee,
-          city: doc.city,
-        });
-      }
 
+      // 1. Load clinic user first (scoped by auth_user_id)
+      let loadedClinicUser: ClinicUser | null = null;
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         try {
@@ -486,10 +500,11 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             if (normalized.role === 'user') {
               normalized.role = 'reception';
             }
+            loadedClinicUser = normalized;
             setClinicUser(normalized);
           } else {
             // Seeded doctor or default fallback
-            setClinicUser({
+            const fallbackUser: ClinicUser = {
               id: user.id,
               email: user.email || 'doctor@shifabook.com',
               full_name: user.user_metadata?.full_name || 'د. عبدالرحمن المصري',
@@ -497,11 +512,13 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
               is_active: true,
               auth_user_id: user.id,
               created_at: new Date().toISOString()
-            });
+            };
+            loadedClinicUser = fallbackUser;
+            setClinicUser(fallbackUser);
           }
         } catch (dbErr) {
           // Graceful fallback if clinic_users table is not yet created
-          setClinicUser({
+          const fallbackUser: ClinicUser = {
             id: user.id,
             email: user.email || 'doctor@shifabook.com',
             full_name: user.user_metadata?.full_name || 'د. عبدالرحمن المصري',
@@ -509,10 +526,66 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             is_active: true,
             auth_user_id: user.id,
             created_at: new Date().toISOString()
-          });
+          };
+          loadedClinicUser = fallbackUser;
+          setClinicUser(fallbackUser);
         }
       } else {
         setClinicUser(null);
+      }
+
+      // 2. Load doctor profile — clinic-scoped if clinic_id available, fallback to .limit(1)
+      const userClinicId = loadedClinicUser?.clinic_id;
+      let doctorLoaded = false;
+
+      if (userClinicId) {
+        // RC-2.0: Clinic-aware doctor loading
+        try {
+          // Load clinic record
+          const { data: clinicData } = await supabase
+            .from('clinics')
+            .select('*')
+            .eq('id', userClinicId)
+            .single();
+          if (clinicData) {
+            setClinic({
+              id: clinicData.id,
+              name: clinicData.name,
+              slug: clinicData.slug,
+              city: clinicData.city,
+              address: clinicData.address,
+              phone: clinicData.phone,
+              is_active: clinicData.is_active
+            });
+          }
+
+          // Load all doctors in clinic
+          const { data: doctors, error: docError } = await supabase
+            .from('doctors')
+            .select('*')
+            .eq('clinic_id', userClinicId);
+
+          if (!docError && doctors && doctors.length > 0) {
+            const mappedDoctors = doctors.map(mapDocRow);
+            setClinicDoctors(mappedDoctors);
+            // Auto-select first doctor (doctor selector is RC-2.1)
+            setDoctorProfile(mappedDoctors[0]);
+            doctorLoaded = true;
+          }
+        } catch (clinicErr) {
+          // Graceful fallback if clinics table doesn't exist yet (pre-migration)
+          console.warn('Clinic-aware loading failed, falling back to legacy:', clinicErr);
+        }
+      }
+
+      // Fallback: legacy .limit(1) if clinic-aware loading didn't succeed
+      if (!doctorLoaded) {
+        const { data, error } = await supabase.from('doctors').select('*').limit(1);
+        if (!error && data && data.length > 0) {
+          const mapped = mapDocRow(data[0]);
+          setDoctorProfile(mapped);
+          setClinicDoctors([mapped]);
+        }
       }
     } catch (err) {
       console.error('Error fetching doctor profile in BookingProvider:', err);
@@ -830,7 +903,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             .limit(1);
 
           if (!existingPatient || existingPatient.length === 0) {
-            await supabase.from('patients').insert({
+            const patientPayload: any = {
               id: crypto.randomUUID(),
               full_name: name,
               phone: searchPhone,
@@ -846,7 +919,10 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
               whatsapp_opt_in: true,
               sms_opt_in: false,
               created_at: new Date().toISOString()
-            });
+            };
+            // RC-2.0: Attach clinic_id if available
+            if (clinic?.id) patientPayload.clinic_id = clinic.id;
+            await supabase.from('patients').insert(patientPayload);
           }
         } catch (syncErr) {
           console.error('Non-blocking patient profile sync error:', syncErr);
@@ -1159,6 +1235,56 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (dateCompare !== 0) return dateCompare;
       return a.timeSlot.localeCompare(b.timeSlot);
     });
+  };
+
+  const resolveDoctorByHandle = async (handle: string): Promise<boolean> => {
+    try {
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from('doctors')
+        .select('*')
+        .eq('handle', handle)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error resolving doctor by handle:', error);
+        return false;
+      }
+
+      if (data) {
+        const mapped = mapDocRow(data);
+        setDoctorProfile(mapped);
+
+        if (data.clinic_id) {
+          try {
+            const { data: clinicData } = await supabase
+              .from('clinics')
+              .select('*')
+              .eq('id', data.clinic_id)
+              .maybeSingle();
+            if (clinicData) {
+              setClinic({
+                id: clinicData.id,
+                name: clinicData.name,
+                slug: clinicData.slug,
+                city: clinicData.city,
+                address: clinicData.address,
+                phone: clinicData.phone,
+                is_active: clinicData.is_active
+              });
+            }
+          } catch (clinicErr) {
+            console.warn('Failed to load clinic for resolved doctor:', clinicErr);
+          }
+        }
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Error resolving doctor by handle:', err);
+      return false;
+    }
   };
 
   const rescheduleAppointment = async (
@@ -1824,12 +1950,17 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const supabase = createClient();
       
       // 1. Check if patient has an active future/today booking
-      const { data: appointments, error: apptError } = await supabase
+      // RC-2.0: Scope by doctor_id to prevent cross-doctor booking conflicts
+      let apptQuery = supabase
         .from('appointments')
         .select('*')
         .eq('patient_phone', normalized)
         .neq('status', 'cancelled')
-        .gte('appointment_date', todayStr)
+        .gte('appointment_date', todayStr);
+      if (doctorProfile?.id) {
+        apptQuery = apptQuery.eq('doctor_id', doctorProfile.id);
+      }
+      const { data: appointments, error: apptError } = await apptQuery
         .order('appointment_date', { ascending: true })
         .order('appointment_time', { ascending: true })
         .limit(1);
@@ -1896,7 +2027,12 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       const { createClient } = await import('@/lib/supabase/client');
       const supabase = createClient();
-      const { data, error } = await supabase.from('patients').select('*').order('full_name');
+      // RC-2.0: Scope patients by clinic_id if available
+      let patientQuery = supabase.from('patients').select('*');
+      if (clinic?.id) {
+        patientQuery = patientQuery.eq('clinic_id', clinic.id);
+      }
+      const { data, error } = await patientQuery.order('full_name');
       if (error) throw error;
       
       if (data && data.length > 0) {
@@ -2049,7 +2185,10 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         createBlockedSlots,
         deleteBlockedSlot,
         bookFollowUpAppointment,
-        getFollowUpChain
+        getFollowUpChain,
+        clinic,
+        clinicDoctors,
+        resolveDoctorByHandle
       }}
     >
       {children}

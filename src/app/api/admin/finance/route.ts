@@ -18,7 +18,7 @@ async function verifyFinanceCaller() {
 
   // Fallback for default doctor
   if (user.id === '5e236d18-ff19-42d5-82cf-6e6d6a177e9a' || user.email === 'doctor@shifabook.com') {
-    return { caller: user, role: 'admin', fullName: 'د. عبدالرحمن المصري' };
+    return { caller: user, role: 'admin', fullName: 'د. عبدالرحمن المصري', clinicId: 'c0000000-0000-0000-0000-000000000001' };
   }
 
   try {
@@ -38,10 +38,10 @@ async function verifyFinanceCaller() {
       return { error: 'الحساب غير نشط.', status: 403 };
     }
 
-    return { caller: user, role, fullName: clinicUser.full_name };
+    return { caller: user, role, fullName: clinicUser.full_name, clinicId: clinicUser.clinic_id || 'c0000000-0000-0000-0000-000000000001' };
   } catch (err) {
     // If clinic_users table is missing, but user is logged in
-    return { caller: user, role: 'admin', fullName: 'د. عبدالرحمن المصري' }; // Fallback
+    return { caller: user, role: 'admin', fullName: 'د. عبدالرحمن المصري', clinicId: 'c0000000-0000-0000-0000-000000000001' }; // Fallback
   }
 }
 
@@ -58,42 +58,90 @@ export async function GET(request: NextRequest) {
   const supabaseAdmin = getAdminClient();
 
   try {
-    // 1. Fetch appointments (confirmed, attended)
-    const { data: appointments, error: apptErr } = await supabaseAdmin
+    // RC-2.0: Scope by clinic's doctors if clinic_id available
+    let doctorIds: string[] = [];
+    const callerClinicId = auth.clinicId;
+
+    if (callerClinicId) {
+      try {
+        const { data: clinicDoctors } = await supabaseAdmin
+          .from('doctors')
+          .select('id')
+          .eq('clinic_id', callerClinicId);
+        if (clinicDoctors && clinicDoctors.length > 0) {
+          doctorIds = clinicDoctors.map((d: any) => d.id);
+        }
+      } catch (e) {
+        // Pre-migration fallback: no clinic_id column
+      }
+    }
+
+    // 1. Fetch appointments (confirmed, attended) — scoped by clinic doctors
+    let apptQuery = supabaseAdmin
       .from('appointments')
       .select('*')
       .in('status', ['confirmed', 'attended'])
       .order('appointment_date', { ascending: false });
+    if (doctorIds.length > 0) {
+      apptQuery = apptQuery.in('doctor_id', doctorIds);
+    }
+    const { data: appointments, error: apptErr } = await apptQuery;
 
     if (apptErr) throw apptErr;
 
+    const appointmentIds = (appointments || []).map((a: any) => a.id);
+
     // 2. Fetch payments
-    const { data: payments, error: payErr } = await supabaseAdmin
+    let payQuery = supabaseAdmin
       .from('payments')
       .select('*');
+    if (doctorIds.length > 0 && appointmentIds.length > 0) {
+      payQuery = payQuery.in('appointment_id', appointmentIds);
+    } else if (doctorIds.length > 0) {
+      payQuery = payQuery.in('appointment_id', []);
+    }
+    const { data: payments, error: payErr } = await payQuery;
 
     if (payErr) throw payErr;
 
     // 3. Fetch invoices
-    const { data: invoices, error: invErr } = await supabaseAdmin
+    let invQuery = supabaseAdmin
       .from('invoices')
       .select('*')
       .order('created_at', { ascending: false });
+    if (doctorIds.length > 0 && appointmentIds.length > 0) {
+      invQuery = invQuery.in('appointment_id', appointmentIds);
+    } else if (doctorIds.length > 0) {
+      invQuery = invQuery.in('appointment_id', []);
+    }
+    const { data: invoices, error: invErr } = await invQuery;
 
     if (invErr) throw invErr;
 
-    // 4. Fetch expenses
-    const { data: expenses, error: expErr } = await supabaseAdmin
+    // 4. Fetch expenses — RC-2.0: scoped by clinic_id
+    let expQuery = supabaseAdmin
       .from('expenses')
       .select('*')
       .order('expense_date', { ascending: false });
+    if (callerClinicId) {
+      try {
+        expQuery = expQuery.eq('clinic_id', callerClinicId);
+      } catch (e) {
+        // Pre-migration: no clinic_id column on expenses
+      }
+    }
+    const { data: expenses, error: expErr } = await expQuery;
 
     if (expErr) throw expErr;
 
-    // 5. Fetch doctor details to get consultation fee if needed
-    const { data: doctors, error: docErr } = await supabaseAdmin
+    // 5. Fetch doctor details — scoped by clinic if available
+    let docQuery = supabaseAdmin
       .from('doctors')
       .select('id, full_name, consultation_fee');
+    if (doctorIds.length > 0) {
+      docQuery = docQuery.in('id', doctorIds);
+    }
+    const { data: doctors, error: docErr } = await docQuery;
 
     // Create a lookup for doctor fees
     const doctorLookup = (doctors || []).reduce((acc: any, doc: any) => {

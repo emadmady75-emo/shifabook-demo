@@ -293,6 +293,34 @@ export default function ProfileSettings({ doctor, language }: ProfileSettingsPro
             />
           </div>
 
+          {/* Direct Booking URL */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-300 block text-right">
+              {isAr ? 'رابط الحجز المباشر (معرف الطبيب)' : 'Direct Booking URL (Doctor Handle)'}
+            </label>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const url = typeof window !== 'undefined' ? `${window.location.origin}/book/${doctor.handle || 'dr-ahmed'}` : `shifabook.com/book/${doctor.handle || 'dr-ahmed'}`;
+                  navigator.clipboard.writeText(url);
+                  if (typeof window !== 'undefined') {
+                    window.alert(isAr ? 'تم نسخ الرابط إلى الحافظة!' : 'Link copied to clipboard!');
+                  }
+                }}
+                className="px-4 py-3 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-300 text-xs font-bold hover:bg-teal-500/20 active:scale-95 transition-all whitespace-nowrap"
+              >
+                {isAr ? 'نسخ الرابط' : 'Copy Link'}
+              </button>
+              <input
+                type="text"
+                readOnly
+                value={typeof window !== 'undefined' ? `${window.location.origin}/book/${doctor.handle || 'dr-ahmed'}` : `shifabook.com/book/${doctor.handle || 'dr-ahmed'}`}
+                className="w-full px-4 py-3 rounded-xl bg-[#070e12] border border-teal-950/30 text-teal-400 text-sm transition-colors text-left font-mono"
+              />
+            </div>
+          </div>
+
           {/* Doctor Profile Photo Upload */}
           <div className="space-y-3">
             <label className="text-xs font-semibold text-slate-300 block text-right">

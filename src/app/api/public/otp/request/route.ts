@@ -4,7 +4,7 @@ import { normalizePhone } from '@/lib/phone';
 
 export async function POST(request: NextRequest) {
   try {
-    const { phone } = await request.json();
+    const { phone, doctorId } = await request.json();
 
     if (!phone) {
       return NextResponse.json({ error: 'Missing phone number' }, { status: 400 });
@@ -29,13 +29,17 @@ export async function POST(request: NextRequest) {
       const day = String(today.getDate()).padStart(2, '0');
       const todayStr = `${year}-${month}-${day}`;
 
-      const { data: activeAppts, error: dbError } = await supabase
+      // RC-2.0: Scope by doctor_id to prevent cross-doctor booking conflicts
+      let otpQuery = supabase
         .from('appointments')
         .select('id')
         .eq('patient_phone', normalizedPhone)
         .neq('status', 'cancelled')
-        .gte('appointment_date', todayStr)
-        .limit(1);
+        .gte('appointment_date', todayStr);
+      if (doctorId) {
+        otpQuery = otpQuery.eq('doctor_id', doctorId);
+      }
+      const { data: activeAppts, error: dbError } = await otpQuery.limit(1);
 
       if (dbError) {
         console.error('Server-side active booking check error:', dbError);

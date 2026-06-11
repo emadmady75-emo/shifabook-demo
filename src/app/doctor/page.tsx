@@ -15,6 +15,8 @@ export interface SupabaseDoctor {
   city: string;
   created_at: string;
   profile_image_url?: string;
+  clinic_id?: string | null;
+  handle?: string | null;
 }
 
 // Define TS-safe interface for Appointments from Supabase
@@ -84,15 +86,34 @@ export default async function DoctorDashboardPage() {
     );
   }
 
-  // 2. Fetch the clinic's doctor profile (defaulting to the first doctor)
+  // 2. Fetch the clinic's doctor profile — RC-2.0: scope by clinic_id if available
   let doctor = null;
-  const { data: docData } = await supabase
-    .from('doctors')
-    .select('*')
-    .limit(1)
-    .maybeSingle();
-  
-  doctor = docData;
+  const userClinicId = clinicUser?.clinic_id;
+
+  if (userClinicId) {
+    // RC-2.0: Clinic-aware doctor loading
+    try {
+      const { data: docData } = await supabase
+        .from('doctors')
+        .select('*')
+        .eq('clinic_id', userClinicId)
+        .limit(1)
+        .maybeSingle();
+      doctor = docData;
+    } catch (e) {
+      // Fallback if clinic_id column doesn't exist yet (pre-migration)
+    }
+  }
+
+  // Fallback: legacy .limit(1) if clinic-aware loading didn't succeed
+  if (!doctor) {
+    const { data: docData } = await supabase
+      .from('doctors')
+      .select('*')
+      .limit(1)
+      .maybeSingle();
+    doctor = docData;
+  }
 
   // Fallback if no doctor row exists at all in the database (unlikely but safe)
   if (!doctor) {

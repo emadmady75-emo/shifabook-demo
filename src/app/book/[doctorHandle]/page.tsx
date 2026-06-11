@@ -15,14 +15,53 @@ export default function DoctorPublicBookingPage() {
   const params = useParams();
   const handle = params?.doctorHandle as string;
 
-  const { language, doctorProfile, activeBookingId, bookings, fetchPublicAvailability, selectedFacility, setSelectedFacility, phoneVerified, scheduleConfig } = useBooking();
+  const { language, doctorProfile, activeBookingId, bookings, fetchPublicAvailability, selectedFacility, setSelectedFacility, phoneVerified, scheduleConfig, resolveDoctorByHandle } = useBooking();
   const isAr = language === 'ar';
+
+  const [isDoctorLoading, setIsDoctorLoading] = useState(true);
+  const [doctorError, setDoctorError] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (handle) {
+      setIsDoctorLoading(true);
+      resolveDoctorByHandle(handle)
+        .then((success) => {
+          if (!success) {
+            setDoctorError(isAr ? 'الطبيب غير موجود' : 'Doctor not found');
+          }
+        })
+        .catch((err) => {
+          console.error(err);
+          setDoctorError(err?.message || 'Error');
+        })
+        .finally(() => {
+          setIsDoctorLoading(false);
+        });
+    }
+  }, [handle, isAr]);
 
   React.useEffect(() => {
     if (doctorProfile?.id) {
       fetchPublicAvailability(doctorProfile.id);
     }
   }, [doctorProfile?.id, selectedFacility.id]);
+
+  if (isDoctorLoading) {
+    return (
+      <div className="flex-grow bg-[#050b0f] min-h-screen flex items-center justify-center text-teal-400 font-bold">
+        {isAr ? 'جاري تحميل بيانات الطبيب...' : 'Loading doctor details...'}
+      </div>
+    );
+  }
+
+  if (doctorError || !doctorProfile?.id) {
+    return (
+      <div className="flex-grow bg-[#050b0f] min-h-screen flex flex-col items-center justify-center text-white space-y-4">
+        <h1 className="text-2xl font-black text-rose-500">{isAr ? 'خطأ في العثور على الطبيب' : 'Doctor Not Found'}</h1>
+        <p className="text-sm text-slate-400">{doctorError || (isAr ? 'عذراً، لم نتمكن من العثور على الصفحة المطلوبة.' : 'Sorry, the requested page could not be found.')}</p>
+      </div>
+    );
+  }
 
   const [selectedDate, setSelectedDate] = useState<string>(
     formatDateOnly(new Date())

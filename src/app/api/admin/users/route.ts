@@ -21,7 +21,7 @@ async function verifyAdminCaller() {
 
   // Fallback for default seeded doctor
   if (user.id === '5e236d18-ff19-42d5-82cf-6e6d6a177e9a' || user.email === 'doctor@shifabook.com') {
-    return { caller: user, isAdmin: true };
+    return { caller: user, isAdmin: true, clinicId: 'c0000000-0000-0000-0000-000000000001' };
   }
 
   // Check database
@@ -42,7 +42,7 @@ async function verifyAdminCaller() {
       return { error: 'عذراً، يجب أن تكون مديراً مسجلاً ونشطاً للقيام بهذا الإجراء.', status: 403 };
     }
 
-    return { caller: user, isAdmin: true };
+    return { caller: user, isAdmin: true, clinicId: clinicUser.clinic_id || 'c0000000-0000-0000-0000-000000000001' };
   } catch (err) {
     // Graceful fallback if clinic_users table is not yet created
     return { error: 'فشل التحقق من الصلاحيات. يرجى التأكد من تشغيل ملف الهجرة بقاعدة البيانات.', status: 500 };
@@ -57,9 +57,14 @@ export async function GET(request: NextRequest) {
 
   const client = await createClient();
   try {
-    const { data, error } = await client
+    // RC-2.0: Scope users by clinic_id if available
+    let usersQuery = client
       .from('clinic_users')
-      .select('*')
+      .select('*');
+    if (authCheck.clinicId) {
+      usersQuery = usersQuery.eq('clinic_id', authCheck.clinicId);
+    }
+    const { data, error } = await usersQuery
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -133,33 +138,40 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 3. Insert into clinic_users
+    // 3. Insert into clinic_users with clinic_id attached from caller
+    const callerClinicId = authCheck.clinicId;
+    const insertPayload: any = {
+      email,
+      full_name,
+      role,
+      is_active: is_active ?? true,
+      auth_user_id: userId,
+      created_by: caller.id,
+      password_reset_required: true
+    };
+    if (callerClinicId) insertPayload.clinic_id = callerClinicId;
+
     let { error: dbError } = await supabaseAdmin
       .from('clinic_users')
-      .insert({
-        email,
-        full_name,
-        role,
-        is_active: is_active ?? true,
-        auth_user_id: userId,
-        created_by: caller.id,
-        password_reset_required: true
-      });
+      .insert(insertPayload);
 
     // Check constraint fallback for un-migrated role databases
     if (dbError && dbError.code === '23514' && role === 'reception') {
       console.warn("Check constraint rejected 'reception', retrying insertion with role 'user' for fallback.");
+      const retryPayload: any = {
+        email,
+        full_name,
+        role: 'user',
+        is_active: is_active ?? true,
+        auth_user_id: userId,
+        created_by: caller.id,
+        password_reset_required: true
+      };
+      if (callerClinicId) retryPayload.clinic_id = callerClinicId;
+
       const retryResult = await supabaseAdmin
         .from('clinic_users')
-        .insert({
-          email,
-          full_name,
-          role: 'user',
-          is_active: is_active ?? true,
-          auth_user_id: userId,
-          created_by: caller.id,
-          password_reset_required: true
-        });
+        .insert(retryPayload);
       dbError = retryResult.error;
     }
 
