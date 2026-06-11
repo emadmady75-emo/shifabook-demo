@@ -87,12 +87,15 @@ export default function AppointmentsList() {
       const isCurrentSlot = selectedRescheduleDate === reschedulingBooking.date && slot.time === reschedulingBooking.timeSlot;
       const isFull = slot.isBooked;
       const isExpired = slot.isExpired;
+      const isBlocked = slot.isBlocked;
 
       let btnCls = '';
       if (isCurrentSlot) {
         btnCls = 'bg-amber-500/10 border-amber-500/70 text-amber-300 cursor-not-allowed';
       } else if (isExpired) {
         btnCls = 'bg-slate-950/20 border-slate-900/20 text-slate-700 cursor-not-allowed opacity-35';
+      } else if (isBlocked) {
+        btnCls = 'bg-slate-900/40 border-slate-900 text-slate-500 cursor-not-allowed opacity-60';
       } else if (isFull) {
         btnCls = 'bg-rose-950/15 border-rose-900/50 text-rose-500/70 cursor-not-allowed';
       } else if (isSelected) {
@@ -105,14 +108,17 @@ export default function AppointmentsList() {
         <button
           key={slot.time}
           type="button"
-          disabled={isExpired || isFull || isCurrentSlot}
+          disabled={isExpired || isFull || isCurrentSlot || isBlocked}
           onClick={() => setSelectedRescheduleTime(slot.time)}
+          title={isBlocked ? (isAr ? 'هذا الموعد غير متاح' : 'This slot is unavailable') : undefined}
           className={`py-2.5 px-1.5 rounded-xl border flex flex-col items-center justify-center transition-all ${btnCls}`}
         >
           <span className="font-bold text-xs">{formatPeriodTime(slot.time)}</span>
           <span className="text-[8px] opacity-80 mt-0.5">
             {isCurrentSlot 
               ? (isAr ? 'الحالي' : 'Current') 
+              : isBlocked
+              ? (isAr ? 'غير متاح' : 'Unavailable')
               : isFull 
               ? (isAr ? 'محجوز' : 'Full') 
               : (isAr ? 'شاغر' : 'Free')}

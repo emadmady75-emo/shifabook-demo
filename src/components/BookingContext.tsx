@@ -182,6 +182,22 @@ export interface TimeSlot {
   capacity: number;
   isBooked: boolean;
   isExpired: boolean;
+  isBlocked?: boolean;
+  blockedReason?: string | null;
+  exceptionId?: string | null;
+  isRecurring?: boolean;
+}
+
+export interface ScheduleException {
+  id: string;
+  doctor_id: string;
+  exception_date: string;
+  slot_time: string;
+  reason: string | null;
+  is_recurring_weekly: boolean;
+  weekday: number | null;
+  created_by: string | null;
+  created_at: string;
 }
 
 export interface WhatsAppEvent {
@@ -246,6 +262,10 @@ interface BookingContextType {
   refreshProfile?: () => Promise<void>;
   clinicUser: ClinicUser | null;
   isLoadingProfile?: boolean;
+  scheduleExceptions: ScheduleException[];
+  isExceptionsTableActive: boolean;
+  createBlockedSlots: (slots: { timeSlot: string; reason: string | null; isRecurring: boolean; weekday: number | null }[], dateStr: string) => Promise<void>;
+  deleteBlockedSlot: (exceptionId: string) => Promise<void>;
 }
 
 const BookingContext = createContext<BookingContextType | undefined>(undefined);
@@ -275,6 +295,124 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [isLoadingAvailability, setIsLoadingAvailability] = useState(true);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [clinicUser, setClinicUser] = useState<ClinicUser | null>(null);
+  const [scheduleExceptions, setScheduleExceptions] = useState<ScheduleException[]>([]);
+  const [isExceptionsTableActive, setIsExceptionsTableActive] = useState<boolean>(true);
+
+  const fetchScheduleExceptions = async () => {
+    const doctorId = doctorProfile?.id;
+    if (!doctorId) return;
+
+    try {
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      
+      const { data, error } = await supabase
+        .from('schedule_exceptions')
+        .select('*')
+        .eq('doctor_id', doctorId);
+      
+      if (error) {
+        if (error.code === 'PGRST205' || error.code === '42P01' || error.message?.includes('relation "schedule_exceptions" does not exist') || error.message?.includes('schema cache')) {
+          setIsExceptionsTableActive(false);
+        } else {
+          console.error("Error loading exceptions:", error);
+        }
+      } else if (data) {
+        setIsExceptionsTableActive(true);
+        setScheduleExceptions(data);
+      }
+    } catch (err) {
+      console.error("Error in fetchScheduleExceptions:", err);
+      setIsExceptionsTableActive(false);
+    }
+  };
+
+  const createBlockedSlots = async (
+    slotsToBlock: { timeSlot: string; reason: string | null; isRecurring: boolean; weekday: number | null }[],
+    dateStr: string
+  ) => {
+    if (clinicUser && !['admin', 'supervisor', 'reception'].includes(clinicUser.role)) {
+      const errorMsg = language === 'ar' ? "ليس لديك صلاحية لتنفيذ هذا الإجراء." : "You do not have permission to perform this action.";
+      throw new Error(errorMsg);
+    }
+
+    const doctorId = doctorProfile?.id;
+    if (!doctorId) throw new Error("No active doctor profile found.");
+
+    // Conflict check
+    for (const slot of slotsToBlock) {
+      const isConflicting = bookings.some(b => {
+        if (b.status === 'cancelled') return false;
+        if (slot.isRecurring) {
+          const bookingDate = parseDateOnlySafe(b.date);
+          return bookingDate.getDay() === slot.weekday && b.timeSlot === slot.timeSlot;
+        } else {
+          return b.date === dateStr && b.timeSlot === slot.timeSlot;
+        }
+      });
+
+      if (isConflicting) {
+        const errorMsg = language === 'ar'
+          ? "هذا الموعد عليه حجز نشط. قم بنقل أو إلغاء الحجز أولاً."
+          : "This slot has an active appointment. Please reschedule or cancel it first.";
+        throw new Error(errorMsg);
+      }
+    }
+
+    try {
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+
+      const insertPayloads = slotsToBlock.map(slot => ({
+        doctor_id: doctorId,
+        exception_date: dateStr,
+        slot_time: slot.timeSlot,
+        reason: slot.reason,
+        is_recurring_weekly: slot.isRecurring,
+        weekday: slot.weekday,
+        created_by: clinicUser?.id || null
+      }));
+
+      const { error } = await supabase
+        .from('schedule_exceptions')
+        .insert(insertPayloads);
+
+      if (error) {
+        throw new Error(error.message || "Failed to block slots.");
+      }
+
+      await fetchScheduleExceptions();
+    } catch (err) {
+      console.error("Error creating blocked slots:", err);
+      throw err;
+    }
+  };
+
+  const deleteBlockedSlot = async (exceptionId: string) => {
+    if (clinicUser && !['admin', 'supervisor', 'reception'].includes(clinicUser.role)) {
+      const errorMsg = language === 'ar' ? "ليس لديك صلاحية لتنفيذ هذا الإجراء." : "You do not have permission to perform this action.";
+      throw new Error(errorMsg);
+    }
+
+    try {
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+
+      const { error } = await supabase
+        .from('schedule_exceptions')
+        .delete()
+        .eq('id', exceptionId);
+
+      if (error) {
+        throw new Error(error.message || "Failed to unblock slot.");
+      }
+
+      await fetchScheduleExceptions();
+    } catch (err) {
+      console.error("Error deleting blocked slot:", err);
+      throw err;
+    }
+  };
 
   const setSelectedFacility = (fac: Facility) => {
     setSelectedFacilityState(fac);
@@ -368,6 +506,12 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setIsLoadingProfile(false);
     }
   };
+
+  useEffect(() => {
+    if (doctorProfile?.id) {
+      fetchScheduleExceptions();
+    }
+  }, [doctorProfile?.id]);
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -487,6 +631,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const fetchPublicAvailability = async (doctorId: string) => {
     setIsLoadingAvailability(true);
+    await fetchScheduleExceptions();
     try {
       const today = new Date();
       const startDate = formatDateOnly(today);
@@ -520,6 +665,8 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const refreshAppointments = async () => {
     const doctorId = doctorProfile?.id;
     if (!doctorId) return;
+
+    await fetchScheduleExceptions();
 
     const isDoctorRoute = typeof window !== 'undefined' && window.location.pathname.startsWith('/doctor');
     if (isDoctorRoute) {
@@ -559,6 +706,25 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const bookAppointment = async (name: string, phone: string, date: string, time: string) => {
+    // Guard: Check if slot is blocked
+    const isSlotBlocked = scheduleExceptions.some(exc => {
+      if (exc.slot_time !== time) return false;
+      if (exc.is_recurring_weekly) {
+        const targetDate = parseDateOnlySafe(date);
+        return exc.weekday === targetDate.getDay();
+      } else {
+        return exc.exception_date === date;
+      }
+    });
+
+    if (isSlotBlocked) {
+      throw new Error(
+        language === 'ar'
+          ? "هذا الموعد غير متاح للحجز (تم إيقافه من قبل إدارة العيادة)."
+          : "This slot is unavailable for booking (blocked by clinic administration)."
+      );
+    }
+
     // Use local ID for client-side state and localStorage representation only
     const finalId = `appt-${Date.now()}`;
     let bookedId = finalId;
@@ -761,6 +927,25 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     // 1. Role enforcement
     if (clinicUser && clinicUser.role === 'accountant') {
       const errorMsg = language === 'ar' ? "ليس لديك صلاحية لتنفيذ هذا الإجراء." : "You do not have permission to perform this action.";
+      if (typeof window !== 'undefined') window.alert(errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    // Guard: Check if destination slot is blocked
+    const isSlotBlocked = scheduleExceptions.some(exc => {
+      if (exc.slot_time !== newTime) return false;
+      if (exc.is_recurring_weekly) {
+        const targetDate = parseDateOnlySafe(newDate);
+        return exc.weekday === targetDate.getDay();
+      } else {
+        return exc.exception_date === newDate;
+      }
+    });
+
+    if (isSlotBlocked) {
+      const errorMsg = language === 'ar'
+        ? "هذا الموعد غير متاح للحجز (تم إيقافه من قبل إدارة العيادة)."
+        : "This slot is unavailable for booking (blocked by clinic administration).";
       if (typeof window !== 'undefined') window.alert(errorMsg);
       throw new Error(errorMsg);
     }
@@ -1268,12 +1453,31 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const isBooked = slotBookings.length >= scheduleConfig.capacityPerSlot;
       const isExpired = isToday && (m < currentTotalMin);
 
+      // Check if this slot is blocked by any exception
+      const matchingException = scheduleExceptions.find(exc => {
+        if (exc.slot_time !== timeStr) return false;
+        if (exc.is_recurring_weekly) {
+          return exc.weekday === dayOfWeek;
+        } else {
+          return exc.exception_date === dateStr;
+        }
+      });
+
+      const isBlocked = !!matchingException;
+      const blockedReason = matchingException ? matchingException.reason : null;
+      const exceptionId = matchingException ? matchingException.id : null;
+      const isRecurring = matchingException ? matchingException.is_recurring_weekly : false;
+
       slots.push({
         time: timeStr,
         bookings: slotBookings,
         capacity: scheduleConfig.capacityPerSlot,
         isBooked,
         isExpired,
+        isBlocked,
+        blockedReason,
+        exceptionId,
+        isRecurring
       });
     }
 
@@ -1596,7 +1800,11 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         refreshAppointments,
         refreshProfile: fetchProfile,
         clinicUser,
-        isLoadingProfile
+        isLoadingProfile,
+        scheduleExceptions,
+        isExceptionsTableActive,
+        createBlockedSlots,
+        deleteBlockedSlot
       }}
     >
       {children}

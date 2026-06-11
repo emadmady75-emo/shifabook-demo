@@ -121,7 +121,7 @@ export default function DoctorDashboardClient({ doctor, initialAppointments }: D
 
   // UI elements visibility checks based on roles
   const showStats = clinicUser?.role !== 'reception';
-  const showSchedule = clinicUser?.role === 'admin' || clinicUser?.role === 'supervisor';
+  const showSchedule = clinicUser?.role === 'admin' || clinicUser?.role === 'supervisor' || clinicUser?.role === 'reception';
   const showProfileSettings = clinicUser?.role === 'admin';
   const showSidebar = showSchedule || showProfileSettings;
 

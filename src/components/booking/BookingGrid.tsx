@@ -105,6 +105,7 @@ export default function BookingGrid({ selectedDate, selectedTime, onSelectTime, 
             const remaining = slot.capacity - slot.bookings.length;
             const isFull = slot.isBooked;
             const isExpired = slot.isExpired;
+            const isBlocked = slot.isBlocked;
             const seatId = `${rowCode}${index + 1}`;
 
             // Highlight the current active booking slot under rescheduling mode
@@ -115,6 +116,8 @@ export default function BookingGrid({ selectedDate, selectedTime, onSelectTime, 
               cardCls = 'bg-amber-500/10 border-2 border-amber-500/80 text-amber-300 cursor-not-allowed shadow-md shadow-amber-500/10 scale-[1.03]';
             } else if (isExpired) {
               cardCls = 'bg-slate-950/20 border-slate-900/30 text-slate-700 cursor-not-allowed opacity-35';
+            } else if (isBlocked) {
+              cardCls = 'bg-slate-900/40 border-slate-900 text-slate-500 cursor-not-allowed opacity-60';
             } else if (isFull) {
               cardCls = 'bg-rose-950/15 border-rose-900/50 text-rose-500/70 cursor-not-allowed';
             } else if (isSelected) {
@@ -126,8 +129,9 @@ export default function BookingGrid({ selectedDate, selectedTime, onSelectTime, 
             return (
               <button
                 key={slot.time}
-                onClick={() => !isExpired && !isFull && !isCurrentSlot && onSelectTime(slot.time)}
-                disabled={isExpired || isFull || isCurrentSlot}
+                onClick={() => !isExpired && !isFull && !isCurrentSlot && !isBlocked && onSelectTime(slot.time)}
+                disabled={isExpired || isFull || isCurrentSlot || isBlocked}
+                title={isBlocked ? (isAr ? 'هذا الموعد غير متاح' : 'This slot is unavailable') : undefined}
                 aria-label={`${isAr ? 'مقعد' : 'Seat'} ${seatId} — ${formatTime(slot.time)}`}
                 aria-pressed={isSelected}
                 className={`relative py-3 px-1.5 rounded-xl border flex flex-col items-center gap-1.5 transition-all duration-200 seat-slot ${cardCls}`}
@@ -139,14 +143,14 @@ export default function BookingGrid({ selectedDate, selectedTime, onSelectTime, 
 
                 {/* Seat icon */}
                 <svg
-                  className={`w-6 h-6 ${isCurrentSlot ? 'text-amber-400' : isSelected ? 'text-[#04080b]' : isFull ? 'text-rose-600/50' : 'text-teal-400/60'}`}
+                  className={`w-6 h-6 ${isCurrentSlot ? 'text-amber-400' : isSelected ? 'text-[#04080b]' : isBlocked ? 'text-slate-600' : isFull ? 'text-rose-600/50' : 'text-teal-400/60'}`}
                   fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
                 </svg>
 
                 {/* Time label — always visible, clear */}
-                <span className={`text-[11px] font-black leading-none tracking-tight text-center ${isCurrentSlot ? 'text-amber-300' : isSelected ? 'text-[#04080b]' : isExpired ? 'text-slate-600 line-through' : 'text-slate-100'}`}>
+                <span className={`text-[11px] font-black leading-none tracking-tight text-center ${isCurrentSlot ? 'text-amber-300' : isSelected ? 'text-[#04080b]' : isBlocked ? 'text-slate-500' : isExpired ? 'text-slate-600 line-through' : 'text-slate-100'}`}>
                   {formatTime(slot.time)}
                 </span>
 
@@ -157,12 +161,16 @@ export default function BookingGrid({ selectedDate, selectedTime, onSelectTime, 
                       ? 'bg-amber-500/20 text-amber-300 border border-amber-500/35'
                       : isSelected
                       ? 'bg-teal-950/25 text-teal-950'
+                      : isBlocked
+                      ? 'bg-slate-900/50 text-slate-400 border border-slate-850'
                       : isFull
                       ? 'bg-rose-500/15 text-rose-400'
                       : 'bg-teal-500/15 text-teal-300'
                   }`}>
                     {isCurrentSlot
                       ? (isAr ? 'موعدك الحالي' : 'Current')
+                      : isBlocked
+                      ? (isAr ? 'غير متاح' : 'Unavailable')
                       : isFull
                       ? (isAr ? 'محجوز' : 'Full')
                       : isSelected
