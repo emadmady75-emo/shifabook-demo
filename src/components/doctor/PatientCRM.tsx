@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useBooking } from '../BookingContext';
+import PatientPhoneLink from './PatientPhoneLink';
 
 export default function PatientCRM() {
   const { 
@@ -186,7 +187,7 @@ export default function PatientCRM() {
                   </span>
                 </div>
                 <div className="flex justify-between text-xs text-slate-400 w-full">
-                  <span>{p.phone}</span>
+                  <span><PatientPhoneLink phone={p.phone} isAr={isAr} /></span>
                   <span>{p.age} {isAr ? 'سنة' : 'yrs'} · {p.gender}</span>
                 </div>
               </button>
@@ -223,7 +224,7 @@ export default function PatientCRM() {
               <div>
                 <h3 className="text-xl font-black text-white">{selectedPatient.full_name}</h3>
                 <p className="text-xs text-slate-400 mt-1 flex items-center gap-3">
-                  <span>{isAr ? 'الهاتف:' : 'Phone:'} <strong className="text-teal-400 font-mono">{selectedPatient.phone}</strong></span>
+                  <span>{isAr ? 'الهاتف:' : 'Phone:'} <PatientPhoneLink phone={selectedPatient.phone} isAr={isAr} /></span>
                   <span>·</span>
                   <span>{isAr ? 'العمر:' : 'Age:'} {selectedPatient.age} {isAr ? 'عاماً' : 'years'} ({selectedPatient.birth_date})</span>
                   <span>·</span>
@@ -396,7 +397,7 @@ export default function PatientCRM() {
                     <span className="text-slate-500 block">{isAr ? 'جهة الطوارئ:' : 'Emergency Contact:'}</span>
                     <span className="font-bold text-white">
                       {selectedPatient.emergency_contact_name 
-                        ? `${selectedPatient.emergency_contact_name} (${selectedPatient.emergency_contact_phone})`
+                        ? <span>{selectedPatient.emergency_contact_name} (<PatientPhoneLink phone={selectedPatient.emergency_contact_phone} isAr={isAr} />)</span>
                         : 'غير مسجل'}
                     </span>
                   </div>

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useBooking } from '../BookingContext';
+import PatientPhoneLink from './PatientPhoneLink';
 
 interface PaymentData {
   id?: string;
@@ -454,7 +455,9 @@ export default function FinanceModule() {
                       <tr key={p.appointment_id} className="hover:bg-teal-950/10 transition-colors">
                         <td className="py-4">
                           <div className="font-bold text-white">{p.patient_name}</div>
-                          <div className="text-[10px] text-slate-400 font-mono">{p.patient_phone}</div>
+                          <div className="text-[10px] text-slate-400 font-mono">
+                            <PatientPhoneLink phone={p.patient_phone} isAr={isAr} />
+                          </div>
                         </td>
                         <td className="py-4">
                           <div>{p.appointment_date}</div>
@@ -555,7 +558,9 @@ export default function FinanceModule() {
                       <td className="py-4 text-teal-300 font-mono font-bold">{inv.invoice_number}</td>
                       <td className="py-4">
                         <div className="font-bold text-white">{inv.patient_name}</div>
-                        <div className="text-[10px] text-slate-400 font-mono">{inv.patient_phone}</div>
+                        <div className="text-[10px] text-slate-400 font-mono">
+                          <PatientPhoneLink phone={inv.patient_phone} isAr={isAr} />
+                        </div>
                       </td>
                       <td className="py-4 font-mono font-bold text-white">{inv.amount} {isAr ? 'ج.م' : 'EGP'}</td>
                       <td className="py-4">

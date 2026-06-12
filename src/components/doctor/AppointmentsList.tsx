@@ -3,6 +3,7 @@
 import React from 'react';
 import { useBooking, PatientBooking, WhatsAppEvent, getQueueCode, FollowUpOptions } from '../BookingContext';
 import { formatDateOnly } from '@/lib/dates';
+import PatientPhoneLink from './PatientPhoneLink';
 
 export default function AppointmentsList() {
   const { 
@@ -380,7 +381,9 @@ export default function AppointmentsList() {
                           </button>
                         )}
                       </div>
-                      <div className="text-xs text-slate-400">{appt.mobileNumber}</div>
+                      <div className="text-xs text-slate-400">
+                        <PatientPhoneLink phone={appt.mobileNumber} isAr={isAr} />
+                      </div>
                       {/* Timeline Popover */}
                       {timelineApptId === appt.id && (
                         <div className="absolute z-40 mt-1 p-3 rounded-xl bg-[#09151e] border border-cyan-500/20 shadow-xl min-w-[220px] max-w-[280px] animate-in fade-in zoom-in-95 duration-150">
@@ -473,7 +476,9 @@ export default function AppointmentsList() {
             <div className="space-y-1">
               {cancelledBookings.slice(0, 3).map((cb) => (
                 <div key={cb.id} className="flex justify-between items-center text-xs bg-rose-950/5 border border-rose-950/20 p-2 rounded-xl text-slate-400">
-                  <span>{cb.patientName} ({cb.mobileNumber})</span>
+                  <span>
+                    {cb.patientName} (<PatientPhoneLink phone={cb.mobileNumber} isAr={isAr} />)
+                  </span>
                   <span>
                     {isAr ? 'ألغى موعد' : 'Cancelled slot'} {cb.date} - {formatPeriodTime(cb.timeSlot)}
                   </span>
@@ -525,7 +530,7 @@ export default function AppointmentsList() {
 
                   {/* Patient details */}
                   <div className="text-xs font-bold text-slate-200">
-                    {evt.patientName} ({evt.phone})
+                    {evt.patientName} (<PatientPhoneLink phone={evt.phone} isAr={isAr} />)
                   </div>
 
                   {/* Message Content Preview */}
@@ -593,7 +598,7 @@ export default function AppointmentsList() {
                 </div>
                 <div className="flex justify-between items-center pb-2 border-b border-teal-950/20">
                   <span className="text-slate-500">{isAr ? 'رقم الهاتف:' : 'Phone Number:'}</span>
-                  <span className="font-mono text-white">{reschedulingBooking.mobileNumber}</span>
+                  <PatientPhoneLink phone={reschedulingBooking.mobileNumber} isAr={isAr} />
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-slate-500">{isAr ? 'الموعد الحالي:' : 'Current Appointment:'}</span>
