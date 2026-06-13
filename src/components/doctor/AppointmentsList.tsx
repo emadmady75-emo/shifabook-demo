@@ -219,17 +219,66 @@ export default function AppointmentsList() {
     return slotTotalMin < currentTotalMin;
   }
 
-  const activeBookings = bookings.filter(b => b.status !== 'cancelled').sort((a, b) => {
-    return a.date.localeCompare(b.date) || a.timeSlot.localeCompare(b.timeSlot);
-  });
+  // 1. Filter and sort active appointments newest first (DESC)
+  const sortedActiveBookings = React.useMemo(() => {
+    const active = bookings.filter(b => b.status !== 'cancelled');
+    
+    // Filter by role if accountant
+    const filtered = active.filter(appt => {
+      if (clinicUser?.role === 'accountant') {
+        const isPast = isAppointmentPast(appt.date, appt.timeSlot);
+        return appt.status === 'confirmed' || appt.status === 'attended' || isPast;
+      }
+      return true;
+    });
 
-  const filteredActiveBookings = activeBookings.filter(appt => {
-    if (clinicUser?.role === 'accountant') {
-      const isPast = isAppointmentPast(appt.date, appt.timeSlot);
-      return appt.status === 'confirmed' || appt.status === 'attended' || isPast;
+    // Sort: Date DESC, Time DESC, Created At DESC
+    return filtered.sort((a, b) => {
+      const dateCompare = b.date.localeCompare(a.date);
+      if (dateCompare !== 0) return dateCompare;
+      
+      const timeCompare = b.timeSlot.localeCompare(a.timeSlot);
+      if (timeCompare !== 0) return timeCompare;
+      
+      return (b.createdAt || '').localeCompare(a.createdAt || '');
+    });
+  }, [bookings, clinicUser]);
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(50);
+
+  const totalAppointmentsCount = sortedActiveBookings.length;
+  const totalPages = Math.max(1, Math.ceil(totalAppointmentsCount / pageSize));
+
+  const paginatedAppointments = React.useMemo(() => {
+    const safePage = Math.min(currentPage, totalPages);
+    const startIndex = (safePage - 1) * pageSize;
+    return sortedActiveBookings.slice(startIndex, startIndex + pageSize);
+  }, [sortedActiveBookings, currentPage, pageSize, totalPages]);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    const delta = 2; // Number of pages to show before and after current page
+    
+    for (let i = 1; i <= totalPages; i++) {
+      if (
+        i === 1 ||
+        i === totalPages ||
+        (i >= currentPage - delta && i <= currentPage + delta)
+      ) {
+        pages.push(i);
+      } else if (
+        i === currentPage - delta - 1 ||
+        i === currentPage + delta + 1
+      ) {
+        pages.push('...');
+      }
     }
-    return true;
-  });
+    
+    // Remove consecutive ellipses
+    return pages.filter((v, i, a) => v !== '...' || a[i - 1] !== '...');
+  };
 
   const cancelledBookings = bookings.filter(b => b.status === 'cancelled').sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
@@ -330,7 +379,7 @@ export default function AppointmentsList() {
           </p>
         </div>
 
-        {filteredActiveBookings.length === 0 ? (
+        {sortedActiveBookings.length === 0 ? (
           <div className="text-center py-12 bg-slate-950/20 rounded-2xl border border-teal-950/40">
             <p className="text-slate-400 text-sm">
               {isAr ? 'لا توجد حجوزات مجدولة نشطة حالياً.' : 'No active bookings registered.'}
@@ -350,7 +399,7 @@ export default function AppointmentsList() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-teal-950/40 text-slate-200">
-                {filteredActiveBookings.map((appt) => (
+                {paginatedAppointments.map((appt) => (
                   <tr key={appt.id} className="hover:bg-teal-950/10 transition-colors">
                     <td className="py-4">
                       <span className="px-2 py-1 rounded-lg bg-teal-500/10 text-teal-400 border border-teal-500/20 font-bold font-mono text-xs">
@@ -464,6 +513,85 @@ export default function AppointmentsList() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Pagination Section */}
+        {sortedActiveBookings.length > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t border-teal-950/30 text-xs text-slate-400">
+            {/* Status text & Page size selector */}
+            <div className="flex flex-wrap items-center gap-3 justify-center sm:justify-start">
+              <span>
+                {isAr 
+                  ? `عرض ${totalAppointmentsCount > 0 ? (currentPage - 1) * pageSize + 1 : 0}–${Math.min(currentPage * pageSize, totalAppointmentsCount)} من ${totalAppointmentsCount} حجز` 
+                  : `Showing ${totalAppointmentsCount > 0 ? (currentPage - 1) * pageSize + 1 : 0}–${Math.min(currentPage * pageSize, totalAppointmentsCount)} of ${totalAppointmentsCount} appointments`}
+              </span>
+              
+              <div className="flex items-center gap-1.5 ml-2 border-l border-teal-950/40 pl-2">
+                <span>{isAr ? 'حجم الصفحة:' : 'Page size:'}</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="bg-[#09151e] border border-teal-950/60 rounded px-2 py-1 text-slate-200 outline-none focus:border-teal-500 text-[11px] font-bold"
+                >
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                  <option value={200}>200</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Page navigation controls */}
+            <div className="flex items-center justify-center gap-1">
+              {/* Previous Button */}
+              <button
+                type="button"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                className="px-3 py-1.5 rounded-lg border border-teal-950 bg-slate-950/30 text-slate-400 hover:text-white hover:border-teal-500/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-bold flex items-center gap-1 cursor-pointer"
+              >
+                <span>◀</span>
+                <span>{isAr ? 'السابق' : 'Previous'}</span>
+              </button>
+
+              {/* Page Numbers */}
+              <div className="flex items-center gap-1 mx-2">
+                {getPageNumbers().map((p, i) => {
+                  if (p === '...') {
+                    return <span key={`dots-${i}`} className="px-2 text-slate-650 font-bold select-none">...</span>;
+                  }
+                  const isActive = currentPage === p;
+                  return (
+                    <button
+                      key={`page-${p}`}
+                      type="button"
+                      onClick={() => setCurrentPage(p as number)}
+                      className={`w-7 h-7 rounded-lg border font-bold text-xs flex items-center justify-center transition-all cursor-pointer ${
+                        isActive 
+                          ? 'bg-gradient-to-r from-teal-500 to-emerald-400 border-teal-300 text-[#070e12]' 
+                          : 'border-teal-950 bg-[#09151e]/40 text-slate-400 hover:border-teal-500/20 hover:text-white'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Next Button */}
+              <button
+                type="button"
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                className="px-3 py-1.5 rounded-lg border border-teal-950 bg-slate-950/30 text-slate-400 hover:text-white hover:border-teal-500/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-bold flex items-center gap-1 cursor-pointer"
+              >
+                <span>{isAr ? 'التالي' : 'Next'}</span>
+                <span>▶</span>
+              </button>
+            </div>
           </div>
         )}
 
