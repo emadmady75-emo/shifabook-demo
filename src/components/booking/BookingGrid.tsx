@@ -206,11 +206,11 @@ export default function BookingGrid({ selectedDate, selectedTime, onSelectTime, 
         </div>
         <div className="space-y-0.5 text-right">
           <h3 className="text-lg font-black text-white flex items-center gap-2 justify-end">
-            <span>{isAr ? 'اختر مقعد الاستشارة' : 'Select a Seat'}</span>
+            <span>{isAr ? 'اختر مقعد الكشف' : 'Select a Seat'}</span>
             <span className="w-7 h-7 rounded-lg bg-teal-500/20 border border-teal-500/30 flex items-center justify-center text-teal-400 text-xs font-black">٢</span>
           </h3>
           <p className="text-[11px] text-slate-500">
-            {isAr ? 'كل مقعد = خانة زمنية مع الطبيب' : 'Each seat = a dedicated time slot with the doctor'}
+            {isAr ? 'كل مقعد = جلسة زمنية مع الطبيب' : 'Each seat = a dedicated time slot with the doctor'}
           </p>
         </div>
       </div>

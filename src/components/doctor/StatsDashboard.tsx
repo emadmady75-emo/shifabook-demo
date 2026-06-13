@@ -34,16 +34,6 @@ export default function StatsDashboard() {
 
   const totalGrossRevenue = confirmedRevenue + pendingRevenue;
 
-  const totalWeeklyCapacity = 16 * scheduleConfig.workingDays.length * scheduleConfig.capacityPerSlot;
-  const occupancyPct = totalWeeklyCapacity > 0
-    ? Math.min(Math.round((activeBookings.length / totalWeeklyCapacity) * 100), 100)
-    : 0;
-
-  // Derive occupancy colour threshold
-  const occupancyColor = occupancyPct >= 75 ? 'from-emerald-400 to-teal-400'
-    : occupancyPct >= 40 ? 'from-teal-400 to-cyan-400'
-    : 'from-amber-400 to-orange-400';
-
   // Attendance Rate calculation:
   // Formula: attended_appointments / (total_completed + total_no_show + total_cancelled_after_confirmation)
   const attendedAppts = bookings.filter(
@@ -103,6 +93,11 @@ export default function StatsDashboard() {
     };
   });
 
+  // Print weeklyRevenueData to console as requested
+  if (typeof window !== 'undefined') {
+    console.log("weeklyRevenueData:", weeklyData);
+  }
+
   const maxRev = Math.max(...weeklyData.map(w => w.revenue), 1000);
   const currentWeekRev = weeklyData[5].revenue;
   const prevWeekRev = weeklyData[4].revenue;
@@ -114,6 +109,21 @@ export default function StatsDashboard() {
     growthPct = 100;
   }
   const growthSign = growthPct >= 0 ? '+' : '';
+
+  // Slot Occupancy Rate calculated on the current week's active bookings
+  const currentWeekActiveBookings = activeBookings.filter(
+    b => b.date >= weekRanges[5].startStr && b.date <= weekRanges[5].endStr
+  );
+
+  const totalWeeklyCapacity = 16 * scheduleConfig.workingDays.length * scheduleConfig.capacityPerSlot;
+  const occupancyPct = totalWeeklyCapacity > 0
+    ? Math.min(Math.round((currentWeekActiveBookings.length / totalWeeklyCapacity) * 100), 100)
+    : 0;
+
+  // Derive occupancy colour threshold
+  const occupancyColor = occupancyPct >= 75 ? 'from-emerald-400 to-teal-400'
+    : occupancyPct >= 40 ? 'from-teal-400 to-cyan-400'
+    : 'from-amber-400 to-orange-400';
 
   const cards = [
     {
@@ -143,7 +153,7 @@ export default function StatsDashboard() {
       unit: '',
       badge: isAr ? 'الطاقة الاستيعابية' : 'Capacity',
       badgeCls: 'bg-teal-500/10 text-teal-300 border-teal-500/20',
-      subLeft: isAr ? `${activeBookings.length} حجز نشط` : `${activeBookings.length} active bookings`,
+      subLeft: isAr ? `${currentWeekActiveBookings.length} حجز نشط` : `${currentWeekActiveBookings.length} active bookings`,
       subRight: isAr ? `${totalWeeklyCapacity} إجمالي المقاعد` : `${totalWeeklyCapacity} total seats`,
       icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -232,17 +242,19 @@ export default function StatsDashboard() {
                 <div className="absolute bottom-full mb-1 bg-slate-950 border border-teal-500/30 text-white text-[9px] font-bold rounded px-1.5 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 shadow-xl">
                   {isAr ? week.labelAr : week.labelEn}: {week.revenue.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
                 </div>
-                {/* Bar */}
-                <div 
-                  className={`w-full rounded-t transition-all duration-500 ${
-                    isCurrent 
-                      ? 'bg-gradient-to-t from-teal-500 to-emerald-400 shadow-md shadow-teal-500/20' 
-                      : isPrev
-                        ? 'bg-teal-500/60'
-                        : 'bg-teal-950/40 border border-teal-900/30'
-                  }`}
-                  style={{ height: `${heightPct}%` }}
-                />
+                {/* Bar Container */}
+                <div className="w-full h-10 flex items-end">
+                  <div 
+                    className={`w-full rounded-t transition-all duration-500 ${
+                      isCurrent 
+                        ? 'bg-gradient-to-t from-teal-500 to-emerald-400 shadow-md shadow-teal-500/20' 
+                        : isPrev
+                          ? 'bg-teal-500/60'
+                          : 'bg-teal-950/40 border border-teal-900/30'
+                    }`}
+                    style={{ height: `${heightPct}%` }}
+                  />
+                </div>
                 {/* Short Label */}
                 <span className="text-[8px] text-slate-500 mt-1 font-semibold scale-90 sm:scale-100">
                   {idx + 1}
