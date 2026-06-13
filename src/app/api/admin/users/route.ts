@@ -58,14 +58,43 @@ export async function GET(request: NextRequest) {
   const client = await createClient();
   try {
     // RC-2.0: Scope users by clinic_id if available
-    let usersQuery = client
-      .from('clinic_users')
-      .select('*');
+    let data = null;
+    let error = null;
+
     if (authCheck.clinicId) {
-      usersQuery = usersQuery.eq('clinic_id', authCheck.clinicId);
+      // Try querying with clinic_id filter first
+      const scopedQuery = client
+        .from('clinic_users')
+        .select('*')
+        .eq('clinic_id', authCheck.clinicId)
+        .order('created_at', { ascending: false });
+      
+      const res = await scopedQuery;
+      
+      if (res.error && (res.error.code === '42703' || res.error.message?.includes('clinic_id'))) {
+        // Fallback: clinic_id column doesn't exist yet, query without filter
+        const fallbackQuery = client
+          .from('clinic_users')
+          .select('*')
+          .order('created_at', { ascending: false });
+        
+        const fallbackRes = await fallbackQuery;
+        data = fallbackRes.data;
+        error = fallbackRes.error;
+      } else {
+        data = res.data;
+        error = res.error;
+      }
+    } else {
+      const fallbackQuery = client
+        .from('clinic_users')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      const fallbackRes = await fallbackQuery;
+      data = fallbackRes.data;
+      error = fallbackRes.error;
     }
-    const { data, error } = await usersQuery
-      .order('created_at', { ascending: false });
 
     if (error) throw error;
 
@@ -138,7 +167,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 3. Insert into clinic_users with clinic_id attached from caller
+    // 3. Insert into clinic_users
     const callerClinicId = authCheck.clinicId;
     const insertPayload: any = {
       email,
@@ -149,11 +178,31 @@ export async function POST(request: NextRequest) {
       created_by: caller.id,
       password_reset_required: true
     };
-    if (callerClinicId) insertPayload.clinic_id = callerClinicId;
 
-    let { error: dbError } = await supabaseAdmin
-      .from('clinic_users')
-      .insert(insertPayload);
+    let dbError = null;
+    let clinicIdColumnExists = true;
+
+    if (callerClinicId) {
+      const res = await supabaseAdmin
+        .from('clinic_users')
+        .insert({ ...insertPayload, clinic_id: callerClinicId });
+      dbError = res.error;
+
+      if (dbError && (dbError.code === '42703' || dbError.message?.includes('clinic_id'))) {
+        clinicIdColumnExists = false;
+        // Fallback: try inserting without clinic_id
+        const fallbackRes = await supabaseAdmin
+          .from('clinic_users')
+          .insert(insertPayload);
+        dbError = fallbackRes.error;
+      }
+    } else {
+      clinicIdColumnExists = false;
+      const res = await supabaseAdmin
+        .from('clinic_users')
+        .insert(insertPayload);
+      dbError = res.error;
+    }
 
     // Check constraint fallback for un-migrated role databases
     if (dbError && dbError.code === '23514' && role === 'reception') {
@@ -167,7 +216,9 @@ export async function POST(request: NextRequest) {
         created_by: caller.id,
         password_reset_required: true
       };
-      if (callerClinicId) retryPayload.clinic_id = callerClinicId;
+      if (callerClinicId && clinicIdColumnExists) {
+        retryPayload.clinic_id = callerClinicId;
+      }
 
       const retryResult = await supabaseAdmin
         .from('clinic_users')

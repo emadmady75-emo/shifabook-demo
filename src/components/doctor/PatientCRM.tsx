@@ -1,8 +1,26 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useBooking } from '../BookingContext';
 import PatientPhoneLink from './PatientPhoneLink';
+import { normalizePhone } from '../../lib/phone';
+
+// Accurately calculate age from date of birth using full years
+function calculateAge(birthDateStr: string): number {
+  if (!birthDateStr) return 0;
+  const birthDate = new Date(birthDateStr);
+  if (isNaN(birthDate.getTime())) return 0;
+  
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  const dayDiff = today.getDate() - birthDate.getDate();
+  
+  if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+    age--;
+  }
+  return age;
+}
 
 export default function PatientCRM() {
   const { 
@@ -12,7 +30,8 @@ export default function PatientCRM() {
     fetchNotesForPatient, 
     addPatientNote, 
     updatePatientProfile,
-    clinicUser
+    clinicUser,
+    bookings
   } = useBooking();
 
   const isAr = language === 'ar';
@@ -51,7 +70,7 @@ export default function PatientCRM() {
       setEditFields({
         gender: selectedPatient.gender || 'غير محدد',
         birth_date: selectedPatient.birth_date || '',
-        age: selectedPatient.age || 0,
+        age: selectedPatient.birth_date ? calculateAge(selectedPatient.birth_date) : (selectedPatient.age || 0),
         blood_type: selectedPatient.blood_type || '',
         chronic_diseases: selectedPatient.chronic_diseases || 'لا يوجد',
         allergies: selectedPatient.allergies || 'لا يوجد',
@@ -87,23 +106,64 @@ export default function PatientCRM() {
     if (!selectedPatient) return;
     setIsSaving(true);
 
+    const finalAge = editFields.birth_date 
+      ? calculateAge(editFields.birth_date) 
+      : Number(editFields.age);
+
     const success = await updatePatientProfile(selectedPatient.id, {
       ...editFields,
-      age: Number(editFields.age)
+      age: finalAge
     });
 
     if (success) {
       setSelectedPatient((prev: any) => ({
         ...prev,
         ...editFields,
-        age: Number(editFields.age)
+        age: finalAge
       }));
       setIsEditing(false);
     }
     setIsSaving(false);
   };
 
-  const filteredPatients = patients.filter(p => {
+  const sortedPatients = useMemo(() => {
+    const patientWithActivity = patients.map(p => {
+      const pPhone = normalizePhone(p.phone);
+      const pBookings = bookings.filter(b => normalizePhone(b.mobileNumber) === pPhone);
+      let latest = null;
+      if (pBookings.length > 0) {
+        latest = pBookings.reduce((lat, curr) => {
+          if (curr.date > lat.date) return curr;
+          if (curr.date === lat.date && curr.timeSlot > lat.timeSlot) return curr;
+          return lat;
+        });
+      }
+      return { patient: p, latest };
+    });
+
+    patientWithActivity.sort((a, b) => {
+      if (a.latest && b.latest) {
+        if (a.latest.date !== b.latest.date) {
+          return b.latest.date.localeCompare(a.latest.date);
+        }
+        if (a.latest.timeSlot !== b.latest.timeSlot) {
+          return b.latest.timeSlot.localeCompare(a.latest.timeSlot);
+        }
+      } else if (a.latest) {
+        return -1;
+      } else if (b.latest) {
+        return 1;
+      }
+
+      const dateA = a.patient.created_at || a.patient.createdAt || '';
+      const dateB = b.patient.created_at || b.patient.createdAt || '';
+      return dateB.localeCompare(dateA);
+    });
+
+    return patientWithActivity.map(x => x.patient);
+  }, [patients, bookings]);
+
+  const filteredPatients = sortedPatients.filter(p => {
     const q = searchQuery.toLowerCase();
     return (
       p.full_name?.toLowerCase().includes(q) || 
@@ -267,7 +327,11 @@ export default function PatientCRM() {
                     <input
                       type="date"
                       value={editFields.birth_date}
-                      onChange={(e) => setEditFields({ ...editFields, birth_date: e.target.value })}
+                      onChange={(e) => {
+                        const newDate = e.target.value;
+                        const newAge = newDate ? calculateAge(newDate) : editFields.age;
+                        setEditFields({ ...editFields, birth_date: newDate, age: newAge });
+                      }}
                       className="w-full bg-[#09151e] border border-teal-950 text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-teal-500"
                     />
                   </div>
@@ -278,8 +342,16 @@ export default function PatientCRM() {
                       type="number"
                       value={editFields.age}
                       onChange={(e) => setEditFields({ ...editFields, age: Number(e.target.value) })}
-                      className="w-full bg-[#09151e] border border-teal-950 text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-teal-500 text-left font-mono"
+                      disabled={!!editFields.birth_date}
+                      className={`w-full bg-[#09151e] border border-teal-950 text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-teal-500 text-left font-mono ${
+                        editFields.birth_date ? 'opacity-60 cursor-not-allowed bg-slate-900/30' : ''
+                      }`}
                     />
+                    {editFields.birth_date && (
+                      <p className="text-[10px] text-teal-400 mt-1">
+                        {isAr ? 'يتم حساب العمر تلقائيًا من تاريخ الميلاد' : 'Age is calculated automatically from date of birth'}
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-1.5">
