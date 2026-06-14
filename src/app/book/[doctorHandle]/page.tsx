@@ -15,7 +15,7 @@ export default function DoctorPublicBookingPage() {
   const params = useParams();
   const handle = params?.doctorHandle as string;
 
-  const { language, doctorProfile, activeBookingId, bookings, fetchPublicAvailability, selectedFacility, setSelectedFacility, phoneVerified, scheduleConfig, resolveDoctorByHandle } = useBooking();
+  const { language, doctorProfile, activeBookingId, bookings, fetchPublicAvailability, selectedFacility, setSelectedFacility, phoneVerified, scheduleConfig, resolveDoctorByHandle, isHydrated, isLoadingAvailability } = useBooking();
   const isAr = language === 'ar';
 
   const [isDoctorLoading, setIsDoctorLoading] = useState(true);
@@ -44,12 +44,12 @@ export default function DoctorPublicBookingPage() {
     if (doctorProfile?.id) {
       fetchPublicAvailability(doctorProfile.id);
     }
-  }, [doctorProfile?.id, selectedFacility.id]);
+  }, [doctorProfile?.id, selectedFacility?.id]);
 
-  if (isDoctorLoading) {
+  if (!isHydrated || isDoctorLoading) {
     return (
       <div className="flex-grow bg-[#050b0f] min-h-screen flex items-center justify-center text-teal-400 font-bold">
-        {isAr ? 'جاري تحميل بيانات الطبيب...' : 'Loading doctor details...'}
+        {isAr ? 'جاري تحميل صفحة الحجز...' : 'Loading booking page...'}
       </div>
     );
   }
@@ -58,7 +58,15 @@ export default function DoctorPublicBookingPage() {
     return (
       <div className="flex-grow bg-[#050b0f] min-h-screen flex flex-col items-center justify-center text-white space-y-4">
         <h1 className="text-2xl font-black text-rose-500">{isAr ? 'خطأ في العثور على الطبيب' : 'Doctor Not Found'}</h1>
-        <p className="text-sm text-slate-400">{doctorError || (isAr ? 'عذراً، لم نتمكن من العثور على الصفحة المطلوبة.' : 'Sorry, the requested page could not be found.')}</p>
+        <p className="text-sm text-slate-400">{doctorError || (isAr ? 'الطبيب غير موجود' : 'The requested doctor does not exist')}</p>
+      </div>
+    );
+  }
+
+  if (isLoadingAvailability) {
+    return (
+      <div className="flex-grow bg-[#050b0f] min-h-screen flex items-center justify-center text-teal-400 font-bold">
+        {isAr ? 'جاري تحميل صفحة الحجز...' : 'Loading booking page...'}
       </div>
     );
   }
@@ -96,8 +104,20 @@ export default function DoctorPublicBookingPage() {
   };
 
   // Convert handle to nice name for customization
+  // Safe mapped values to prevent undefined crashes
+  const doctorName = isAr ? (doctorProfile?.name || '') : (doctorProfile?.nameEn || '');
+  const doctorTitle = isAr ? (doctorProfile?.title || '') : (doctorProfile?.titleEn || '');
+  const doctorHospital = isAr ? (doctorProfile?.hospital || '') : (doctorProfile?.hospitalEn || '');
+  const doctorSpecialization = isAr ? (doctorProfile?.specialization || '') : (doctorProfile?.specializationEn || '');
+  const doctorAvatar = doctorProfile?.avatar || '';
+  const doctorFee = doctorProfile?.consultationFee ?? 0;
+
+  const facilityName = isAr ? (selectedFacility?.name || '') : (selectedFacility?.nameEn || '');
+  const facilityAddress = isAr ? (selectedFacility?.address || '') : (selectedFacility?.addressEn || '');
+  const facilityMapUrl = selectedFacility?.mapUrl || '#';
+
   const getDoctorDisplayName = () => {
-    return isAr ? doctorProfile.name : doctorProfile.nameEn;
+    return doctorName;
   };
 
   const formatPeriodTime = (timeStr: string) => {
@@ -129,7 +149,7 @@ export default function DoctorPublicBookingPage() {
                 {/* Avatar */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={doctorProfile.avatar}
+                  src={doctorAvatar}
                   alt={getDoctorDisplayName()}
                   className="w-28 h-28 md:w-32 md:h-32 rounded-3xl object-cover border-3 border-teal-500/25 shadow-xl shadow-black/50"
                 />
@@ -145,16 +165,16 @@ export default function DoctorPublicBookingPage() {
                   </h1>
 
                   <p className="text-sm font-bold text-teal-400">
-                    {isAr ? doctorProfile.title : doctorProfile.titleEn}
+                    {doctorTitle}
                   </p>
 
                   <p className="text-xs text-slate-300 font-bold">
-                    {isAr ? doctorProfile.hospital : doctorProfile.hospitalEn}
-                    {doctorProfile.city ? ` - ${doctorProfile.city}` : ''}
+                    {doctorHospital}
+                    {doctorProfile?.city ? ` - ${doctorProfile.city}` : ''}
                   </p>
 
                   <p className="text-xs text-slate-400 leading-relaxed max-w-xl">
-                    {isAr ? doctorProfile.specialization : doctorProfile.specializationEn}
+                    {doctorSpecialization}
                   </p>
                 </div>
               </div>
@@ -163,7 +183,7 @@ export default function DoctorPublicBookingPage() {
               <div className="w-full md:w-auto p-5 rounded-2xl bg-teal-950/20 border border-teal-900/40 text-center space-y-2">
                 <span className="text-xs text-slate-400 block">{isAr ? 'قيمة الكشف بالعيادة' : 'Clinic Consult Rate'}</span>
                 <span className="text-2xl font-black text-white block">
-                  {doctorProfile.consultationFee ?? 0} {isAr ? 'ج.م' : 'EGP'}
+                  {doctorFee} {isAr ? 'ج.م' : 'EGP'}
                 </span>
                 <span className="text-[10px] text-slate-500 block">
                   {isAr ? 'تأكيد الحجز فوري عبر الواتساب' : 'WhatsApp Confirmed'}
@@ -227,16 +247,16 @@ export default function DoctorPublicBookingPage() {
                     </label>
                     <div className="p-4 rounded-2xl bg-teal-950/10 border border-teal-900/20 text-right space-y-1.5">
                       <p className="text-sm font-bold text-teal-300">
-                        {isAr ? selectedFacility.name : selectedFacility.nameEn}
+                        {facilityName}
                       </p>
                       
                       {/* Address and Google Maps Link */}
                       <div className="flex items-center justify-between text-xs text-slate-400 pt-1 border-t border-teal-950/40">
                         <span>
-                          {isAr ? selectedFacility.address : selectedFacility.addressEn}
+                          {facilityAddress}
                         </span>
                         <a
-                          href={selectedFacility.mapUrl}
+                          href={facilityMapUrl}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-teal-400 hover:text-teal-300 flex items-center gap-1 font-semibold"
