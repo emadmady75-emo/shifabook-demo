@@ -219,6 +219,9 @@ export default function AppointmentsList() {
     return slotTotalMin < currentTotalMin;
   }
 
+  // Active Tab State: 'today' or 'all'
+  const [activeTab, setActiveTab] = React.useState<'today' | 'all'>('today');
+
   // 1. Filter and sort active appointments newest first (DESC)
   const sortedActiveBookings = React.useMemo(() => {
     const active = bookings.filter(b => b.status !== 'cancelled');
@@ -244,6 +247,22 @@ export default function AppointmentsList() {
     });
   }, [bookings, clinicUser]);
 
+  // 2. Count for Today's Appointments (Default Tab)
+  const todayAppointmentsCount = React.useMemo(() => {
+    const todayStr = formatDateOnly(new Date());
+    const active = bookings.filter(b => b.status !== 'cancelled' && b.date === todayStr);
+    
+    // Filter by role if accountant
+    const filtered = active.filter(appt => {
+      if (clinicUser?.role === 'accountant') {
+        const isPast = isAppointmentPast(appt.date, appt.timeSlot);
+        return appt.status === 'confirmed' || appt.status === 'attended' || isPast;
+      }
+      return true;
+    });
+    return filtered.length;
+  }, [bookings, clinicUser]);
+
   // Pagination State
   const [currentPage, setCurrentPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(50);
@@ -256,6 +275,29 @@ export default function AppointmentsList() {
     const startIndex = (safePage - 1) * pageSize;
     return sortedActiveBookings.slice(startIndex, startIndex + pageSize);
   }, [sortedActiveBookings, currentPage, pageSize, totalPages]);
+
+  // Dynamically select and sort the displayed appointments based on the active tab
+  const displayedAppointments = React.useMemo(() => {
+    if (activeTab === 'today') {
+      const todayStr = formatDateOnly(new Date());
+      const active = bookings.filter(b => b.status !== 'cancelled' && b.date === todayStr);
+      
+      // Filter by role if accountant
+      const filtered = active.filter(appt => {
+        if (clinicUser?.role === 'accountant') {
+          const isPast = isAppointmentPast(appt.date, appt.timeSlot);
+          return appt.status === 'confirmed' || appt.status === 'attended' || isPast;
+        }
+        return true;
+      });
+      
+      // Sort today: Time ASC
+      return filtered.sort((a, b) => a.timeSlot.localeCompare(b.timeSlot));
+    } else {
+      // Tab 2: All appointments paginated
+      return paginatedAppointments;
+    }
+  }, [activeTab, bookings, clinicUser, paginatedAppointments]);
 
   const getPageNumbers = () => {
     const pages = [];
@@ -379,10 +421,39 @@ export default function AppointmentsList() {
           </p>
         </div>
 
-        {sortedActiveBookings.length === 0 ? (
+        {/* Tabs */}
+        <div className="flex border-b border-teal-950/60 pb-px" dir={isAr ? 'rtl' : 'ltr'}>
+          <button
+            type="button"
+            onClick={() => setActiveTab('today')}
+            className={`pb-3 text-sm font-bold border-b-2 px-4 transition-colors cursor-pointer ${
+              activeTab === 'today'
+                ? 'border-teal-500 text-teal-400'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            {isAr ? 'مواعيد اليوم' : "Today's Appointments"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('all')}
+            className={`pb-3 text-sm font-bold border-b-2 px-4 transition-colors cursor-pointer ${
+              activeTab === 'all'
+                ? 'border-teal-500 text-teal-400'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            {isAr ? 'جميع المواعيد' : 'All Appointments'}
+          </button>
+        </div>
+
+        {((activeTab === 'today' && todayAppointmentsCount === 0) || (activeTab === 'all' && sortedActiveBookings.length === 0)) ? (
           <div className="text-center py-12 bg-slate-950/20 rounded-2xl border border-teal-950/40">
             <p className="text-slate-400 text-sm">
-              {isAr ? 'لا توجد حجوزات مجدولة نشطة حالياً.' : 'No active bookings registered.'}
+              {activeTab === 'today'
+                ? (isAr ? 'لا توجد مواعيد مجدولة اليوم.' : 'No appointments scheduled for today.')
+                : (isAr ? 'لا توجد حجوزات مجدولة نشطة حالياً.' : 'No active bookings registered.')
+              }
             </p>
           </div>
         ) : (
@@ -399,7 +470,7 @@ export default function AppointmentsList() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-teal-950/40 text-slate-200">
-                {paginatedAppointments.map((appt) => (
+                {displayedAppointments.map((appt) => (
                   <tr key={appt.id} className="hover:bg-teal-950/10 transition-colors">
                     <td className="py-4">
                       <span className="px-2 py-1 rounded-lg bg-teal-500/10 text-teal-400 border border-teal-500/20 font-bold font-mono text-xs">
@@ -517,7 +588,7 @@ export default function AppointmentsList() {
         )}
 
         {/* Pagination Section */}
-        {sortedActiveBookings.length > 0 && (
+        {activeTab === 'all' && sortedActiveBookings.length > 0 && (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t border-teal-950/30 text-xs text-slate-400">
             {/* Status text & Page size selector */}
             <div className="flex flex-wrap items-center gap-3 justify-center sm:justify-start">

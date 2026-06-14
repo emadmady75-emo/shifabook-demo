@@ -22,6 +22,65 @@ function calculateAge(birthDateStr: string): number {
   return age;
 }
 
+// Helper functions for English localization of CRM values
+function translateGender(value: string, isAr: boolean): string {
+  if (isAr) return value || 'غير محدد';
+  if (!value) return 'Unspecified';
+  const val = value.trim();
+  if (val === 'ذكر') return 'Male';
+  if (val === 'أنثى') return 'Female';
+  if (val === 'غير محدد') return 'Unspecified';
+  return value;
+}
+
+function translatePatientCategory(value: string, isAr: boolean): string {
+  if (isAr) return value || 'طبيعي';
+  if (!value) return 'Normal';
+  const val = value.trim().toLowerCase();
+  if (val === 'طبيعي' || val === 'normal') return 'Normal';
+  if (val === 'مهم' || val === 'vip') return 'Important';
+  if (val === 'مزمن' || val === 'chronic') return 'Chronic';
+  if (val === 'متابعة' || val === 'follow_up') return 'Follow-up';
+  if (val === 'طوارئ' || val === 'critical' || val === 'emergency') return 'Emergency';
+  return value;
+}
+
+function translateEmptyValue(value: string, isAr: boolean): string {
+  if (isAr) return value || 'لا يوجد';
+  if (!value) return 'None';
+  const val = value.trim();
+  if (val === 'لا يوجد' || val === 'لا توجد') return 'None';
+  if (val === 'غير مسجل') return 'Not registered';
+  if (val === 'لا توجد ملاحظات عامة.') return 'No general clinical notes.';
+  return value;
+}
+
+function translateNoteType(type: string, isAr: boolean): string {
+  if (isAr) return type || 'كشف دوري';
+  if (!type) return 'Consultation';
+  const val = type.trim();
+  const mapping: Record<string, string> = {
+    'كشف دوري': 'Consultation',
+    'متابعة ضغط': 'Hypertension Check',
+    'قسطرة قلبية': 'Catheterization',
+    'تعديل دواء': 'Medication Adjustment',
+    'طوارئ': 'Emergency',
+    'حالة طارئة': 'Emergency',
+    'تشخيص': 'Diagnosis',
+    'متابعة': 'Follow-up',
+    'ملاحظة عامة': 'General Note'
+  };
+  return mapping[val] || val;
+}
+
+function formatArabicDate(dateStr: string): string {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  const [year, month, day] = parts;
+  return `${day}/${month}/${year}`;
+}
+
 export default function PatientCRM() {
   const { 
     language, 
@@ -248,7 +307,7 @@ export default function PatientCRM() {
                 </div>
                 <div className="flex justify-between text-xs text-slate-400 w-full">
                   <span><PatientPhoneLink phone={p.phone} isAr={isAr} /></span>
-                  <span>{p.age} {isAr ? 'سنة' : 'yrs'} · {p.gender}</span>
+                  <span>{p.age} {isAr ? 'سنة' : 'yrs'} · {translateGender(p.gender, isAr)}</span>
                 </div>
               </button>
             ))
@@ -286,7 +345,7 @@ export default function PatientCRM() {
                 <p className="text-xs text-slate-400 mt-1 flex items-center gap-3">
                   <span>{isAr ? 'الهاتف:' : 'Phone:'} <PatientPhoneLink phone={selectedPatient.phone} isAr={isAr} /></span>
                   <span>·</span>
-                  <span>{isAr ? 'العمر:' : 'Age:'} {selectedPatient.age} {isAr ? 'عاماً' : 'years'} ({selectedPatient.birth_date})</span>
+                  <span>{isAr ? 'العمر:' : 'Age:'} {selectedPatient.age} {isAr ? 'عاماً' : 'years'} ({selectedPatient.birth_date ? (isAr ? formatArabicDate(selectedPatient.birth_date) : selectedPatient.birth_date) : ''})</span>
                   <span>·</span>
                   <span>{isAr ? 'فصيلة الدم:' : 'Blood Group:'} <strong className="text-teal-400">{selectedPatient.blood_type || 'A+'}</strong></span>
                 </p>
@@ -334,6 +393,11 @@ export default function PatientCRM() {
                       }}
                       className="w-full bg-[#09151e] border border-teal-950 text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-teal-500"
                     />
+                    {isAr && editFields.birth_date && (
+                      <p className="text-[10px] text-teal-400 mt-1">
+                        التاريخ المختار: {formatArabicDate(editFields.birth_date)}
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-1.5">
@@ -368,7 +432,7 @@ export default function PatientCRM() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-300 block">{isAr ? 'الأمراض المزمنة' : 'Chronic Diseases'}</label>
+                    <label className="text-xs font-semibold text-slate-300 block">{isAr ? 'الأمراض المزمنة' : 'Chronic Conditions'}</label>
                     <input
                       type="text"
                       value={editFields.chronic_diseases}
@@ -444,16 +508,20 @@ export default function PatientCRM() {
                 <div className="space-y-2">
                   <div className="text-xs">
                     <span className="text-slate-500 block">{isAr ? 'النوع والجنس:' : 'Gender:'}</span>
-                    <span className="font-bold text-white">{selectedPatient.gender || 'غير محدد'}</span>
+                    <span className="font-bold text-white">{translateGender(selectedPatient.gender, isAr)}</span>
                   </div>
                   <div className="text-xs">
                     <span className="text-slate-500 block">{isAr ? 'تاريخ الميلاد:' : 'Birth Date:'}</span>
-                    <span className="font-bold text-white font-mono">{selectedPatient.birth_date || 'غير محدد'}</span>
+                    <span className="font-bold text-white font-mono">
+                      {selectedPatient.birth_date 
+                        ? (isAr ? formatArabicDate(selectedPatient.birth_date) : selectedPatient.birth_date)
+                        : (isAr ? 'غير محدد' : 'Unspecified')}
+                    </span>
                   </div>
                   <div className="text-xs">
                     <span className="text-slate-500 block">{isAr ? 'الأمراض المزمنة:' : 'Chronic Conditions:'}</span>
                     <span className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-300 border border-rose-500/10 text-[11px] font-bold">
-                      {selectedPatient.chronic_diseases || 'لا يوجد'}
+                      {translateEmptyValue(selectedPatient.chronic_diseases, isAr)}
                     </span>
                   </div>
                 </div>
@@ -462,7 +530,7 @@ export default function PatientCRM() {
                   <div className="text-xs">
                     <span className="text-slate-500 block">{isAr ? 'حساسية الأدوية:' : 'Allergies:'}</span>
                     <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/10 text-[11px] font-bold">
-                      {selectedPatient.allergies || 'لا يوجد'}
+                      {translateEmptyValue(selectedPatient.allergies, isAr)}
                     </span>
                   </div>
                   <div className="text-xs">
@@ -470,12 +538,14 @@ export default function PatientCRM() {
                     <span className="font-bold text-white">
                       {selectedPatient.emergency_contact_name 
                         ? <span>{selectedPatient.emergency_contact_name} (<PatientPhoneLink phone={selectedPatient.emergency_contact_phone} isAr={isAr} />)</span>
-                        : 'غير مسجل'}
+                        : (isAr ? 'غير مسجل' : 'Not registered')}
                     </span>
                   </div>
                   <div className="text-xs">
                     <span className="text-slate-500 block">{isAr ? 'التوجيه العام:' : 'General Clinical Notes:'}</span>
-                    <p className="text-slate-300 text-[11px] leading-relaxed">{selectedPatient.notes || 'لا توجد ملاحظات عامة.'}</p>
+                    <p className="text-slate-300 text-[11px] leading-relaxed">
+                      {translateEmptyValue(selectedPatient.notes || 'لا توجد ملاحظات عامة.', isAr)}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -546,7 +616,7 @@ export default function PatientCRM() {
                       <div className="flex justify-between items-center text-[10px] text-slate-500">
                         <span className="font-mono">{new Date(note.created_at).toLocaleString(isAr ? 'ar-EG' : 'en-US')}</span>
                         <span className="px-2 py-0.5 rounded bg-teal-500/10 text-teal-400 font-bold border border-teal-500/10">
-                          {note.note_type}
+                          {translateNoteType(note.note_type, isAr)}
                         </span>
                       </div>
                       <p className="text-xs text-slate-200 leading-relaxed font-semibold">{note.note}</p>
