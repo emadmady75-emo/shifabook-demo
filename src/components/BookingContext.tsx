@@ -10,7 +10,7 @@ import {
   EGYPTIAN_SCHEDULE_CONFIG,
   EGYPTIAN_DEMO_PATIENTS
 } from '@/lib/demoData';
-import { formatDateOnly, parseDateOnlySafe } from '@/lib/dates';
+import { formatDateOnly, parseDateOnlySafe, isAppointmentInFutureOrNow } from '@/lib/dates';
 
 export type { Facility, DoctorProfile, ScheduleConfig };
 
@@ -653,8 +653,12 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           parsed.date &&
           parsed.timeSlot
         ) {
-          parsedActiveBooking = parsed;
-          validActiveId = parsed.id;
+          if (isAppointmentInFutureOrNow(parsed.date, parsed.timeSlot)) {
+            parsedActiveBooking = parsed;
+            validActiveId = parsed.id;
+          } else {
+            console.warn('Stored active booking has expired, clearing.');
+          }
         } else {
           console.warn('Invalid or legacy active booking details format in localStorage, clearing.');
         }
@@ -862,13 +866,15 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           .eq('doctor_id', doctorId)
           .eq('patient_phone', normalizedPhone)
           .neq('status', 'cancelled')
-          .gte('appointment_date', todayStr)
-          .limit(1);
+          .gte('appointment_date', todayStr);
 
         if (checkError) {
           console.error('Error checking active appointments during insert:', checkError);
         } else if (activeAppts && activeAppts.length > 0) {
-          throw new Error("لديك حجز نشط بالفعل مسجل بهذا الرقم. يرجى إلغاء الموعد أو تعديله أولاً.");
+          const hasRealActive = activeAppts.some(appt => isAppointmentInFutureOrNow(appt.appointment_date, appt.appointment_time));
+          if (hasRealActive) {
+            throw new Error("لديك حجز نشط بالفعل مسجل بهذا الرقم. يرجى إلغاء الموعد أو تعديله أولاً.");
+          }
         }
         
         const computedQueueCode = getQueueCode(date, time, scheduleConfig);
@@ -1973,29 +1979,33 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
       const { data: appointments, error: apptError } = await apptQuery
         .order('appointment_date', { ascending: true })
-        .order('appointment_time', { ascending: true })
-        .limit(1);
+        .order('appointment_time', { ascending: true });
 
       let foundActive: PatientBooking | null = null;
       if (!apptError && appointments && appointments.length > 0) {
-        const appt = appointments[0];
-        foundActive = {
-          id: appt.id,
-          patientName: appt.patient_name,
-          mobileNumber: appt.patient_phone,
-          date: appt.appointment_date,
-          timeSlot: appt.appointment_time,
-          status: appt.status as any,
-          price: appt.consultation_fee_at_booking ?? doctorProfile?.consultationFee ?? 0,
-          createdAt: appt.created_at,
-          cancelled_by: appt.cancelled_by,
-          cancelled_at: appt.cancelled_at,
-          rescheduled_by: appt.rescheduled_by,
-          rescheduled_at: appt.rescheduled_at,
-          queue_code: appt.queue_code
-        };
+        const activeAppt = appointments.find(appt => isAppointmentInFutureOrNow(appt.appointment_date, appt.appointment_time));
+        if (activeAppt) {
+          foundActive = {
+            id: activeAppt.id,
+            patientName: activeAppt.patient_name,
+            mobileNumber: activeAppt.patient_phone,
+            date: activeAppt.appointment_date,
+            timeSlot: activeAppt.appointment_time,
+            status: activeAppt.status as any,
+            price: activeAppt.consultation_fee_at_booking ?? doctorProfile?.consultationFee ?? 0,
+            createdAt: activeAppt.created_at,
+            cancelled_by: activeAppt.cancelled_by,
+            cancelled_at: activeAppt.cancelled_at,
+            rescheduled_by: activeAppt.rescheduled_by,
+            rescheduled_at: activeAppt.rescheduled_at,
+            queue_code: activeAppt.queue_code
+          };
+        }
+      }
+
+      if (foundActive) {
         setActiveBooking(foundActive);
-        saveActiveId(appt.id);
+        saveActiveId(foundActive.id);
         localStorage.setItem('shifabook_active_booking_details', JSON.stringify(foundActive));
       } else {
         setActiveBooking(null);

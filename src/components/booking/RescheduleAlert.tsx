@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { useBooking, getActorArabicLabel, getQueueCode } from '../BookingContext';
+import { isAppointmentInFutureOrNow } from '@/lib/dates';
 
 interface RescheduleAlertProps {
   onTriggerReschedule: () => void;
@@ -15,6 +16,8 @@ export default function RescheduleAlert({ onTriggerReschedule, onClear, isResche
   const isAr = language === 'ar';
 
   if (!activeBooking || activeBooking.status === 'cancelled' || !activeBooking.timeSlot || !activeBooking.date || !activeBooking.patientName) return null;
+  if (!isAppointmentInFutureOrNow(activeBooking.date, activeBooking.timeSlot)) return null;
+
 
   const formatPeriodTime = (timeStr: string) => {
     if (!timeStr || typeof timeStr !== 'string' || !timeStr.includes(':')) {
