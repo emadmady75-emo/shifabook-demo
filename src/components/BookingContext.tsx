@@ -625,7 +625,12 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     if (storedConfig) {
       try {
-        setScheduleConfig(JSON.parse(storedConfig));
+        const parsed = JSON.parse(storedConfig);
+        if (parsed && typeof parsed === 'object' && Array.isArray(parsed.workingDays) && parsed.startTime && parsed.endTime) {
+          setScheduleConfig(parsed);
+        } else {
+          console.warn('Invalid stored schedule config structure in localStorage, keeping default.');
+        }
       } catch (e) {
         console.error('Failed to parse stored config:', e);
       }
@@ -677,7 +682,12 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (storedLang) setLanguage(storedLang as 'ar' | 'en');
     if (storedFacility) {
       try {
-        setSelectedFacilityState(JSON.parse(storedFacility));
+        const parsed = JSON.parse(storedFacility);
+        if (parsed && typeof parsed === 'object' && parsed.id && parsed.name && parsed.mapUrl) {
+          setSelectedFacilityState(parsed);
+        } else {
+          console.warn('Invalid stored facility structure in localStorage, keeping default.');
+        }
       } catch (e) {
         console.error('Failed to parse stored facility:', e);
       }

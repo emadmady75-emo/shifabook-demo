@@ -11,7 +11,60 @@ import RescheduleAlert from '@/components/booking/RescheduleAlert';
 import { useBooking, PatientBooking, getActorArabicLabel, getQueueCode } from '@/components/BookingContext';
 import { formatDateOnly } from '@/lib/dates';
 
+class PageErrorBoundary extends React.Component<
+  { children: React.ReactNode; isAr: boolean },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("Client exception caught by PageErrorBoundary:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex-grow bg-[#050b0f] min-h-screen flex flex-col items-center justify-center text-white space-y-4 p-6 text-center" dir={this.props.isAr ? "rtl" : "ltr"}>
+          <h1 className="text-2xl font-black text-rose-500">
+            {this.props.isAr ? 'عذراً، حدث خطأ غير متوقع' : 'Unexpected Error Occurred'}
+          </h1>
+          <p className="text-sm text-slate-400 max-w-md mx-auto">
+            {this.props.isAr 
+              ? 'حدثت مشكلة أثناء تحميل صفحة الحجز. يرجى المحاولة مرة أخرى أو الاتصال بالدعم.' 
+              : 'A problem occurred while loading the booking page. Please try again or contact support.'}
+          </p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="px-5 py-2.5 rounded-xl bg-teal-500 text-slate-950 font-bold text-xs hover:bg-teal-400 active:scale-95 transition-all"
+          >
+            {this.props.isAr ? 'إعادة تحميل الصفحة' : 'Reload Page'}
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 export default function DoctorPublicBookingPage() {
+  const { language } = useBooking();
+  const isAr = language === 'ar';
+  return (
+    <PageErrorBoundary isAr={isAr}>
+      <DoctorBookingPageContent />
+    </PageErrorBoundary>
+  );
+}
+
+function DoctorBookingPageContent() {
   const params = useParams();
   const handle = params?.doctorHandle as string;
 
@@ -20,6 +73,16 @@ export default function DoctorPublicBookingPage() {
 
   const [isDoctorLoading, setIsDoctorLoading] = useState(true);
   const [doctorError, setDoctorError] = useState<string | null>(null);
+
+  const [selectedDate, setSelectedDate] = useState<string>(
+    formatDateOnly(new Date())
+  );
+  const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  
+  // State for Booking Modal / Success Receipt
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isRescheduling, setIsRescheduling] = useState(false);
+  const [lastCompletedBooking, setLastCompletedBooking] = useState<PatientBooking | null>(null);
 
   React.useEffect(() => {
     if (handle) {
@@ -71,16 +134,6 @@ export default function DoctorPublicBookingPage() {
     );
   }
 
-  const [selectedDate, setSelectedDate] = useState<string>(
-    formatDateOnly(new Date())
-  );
-  const [selectedTime, setSelectedTime] = useState<string | null>(null);
-  
-  // State for Booking Modal / Success Receipt
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isRescheduling, setIsRescheduling] = useState(false);
-  const [lastCompletedBooking, setLastCompletedBooking] = useState<PatientBooking | null>(null);
-
   const handleSelectTime = (time: string) => {
     setSelectedTime(time);
     setIsModalOpen(true);
@@ -112,9 +165,19 @@ export default function DoctorPublicBookingPage() {
   const doctorAvatar = doctorProfile?.avatar || '';
   const doctorFee = doctorProfile?.consultationFee ?? 0;
 
-  const facilityName = isAr ? (selectedFacility?.name || '') : (selectedFacility?.nameEn || '');
-  const facilityAddress = isAr ? (selectedFacility?.address || '') : (selectedFacility?.addressEn || '');
-  const facilityMapUrl = selectedFacility?.mapUrl || '#';
+  // Fallback facility object in case selectedFacility is missing
+  const facility = selectedFacility || {
+    id: 'fallback-facility',
+    name: doctorProfile?.hospital || (isAr ? 'العيادة' : 'Clinic'),
+    nameEn: doctorProfile?.hospitalEn || 'Clinic',
+    address: doctorProfile?.city ? (isAr ? `فرع ${doctorProfile.city}` : `${doctorProfile.city} Branch`) : '',
+    addressEn: doctorProfile?.city ? `${doctorProfile.city} Branch` : '',
+    mapUrl: '#'
+  };
+
+  const facilityName = isAr ? (facility.name || '') : (facility.nameEn || '');
+  const facilityAddress = isAr ? (facility.address || '') : (facility.addressEn || '');
+  const facilityMapUrl = facility.mapUrl || '#';
 
   const getDoctorDisplayName = () => {
     return doctorName;
