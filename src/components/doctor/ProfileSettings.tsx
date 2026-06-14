@@ -23,6 +23,8 @@ export default function ProfileSettings({ doctor, language }: ProfileSettingsPro
   const [clinicName, setClinicName] = useState(doctor.clinic_name || '');
   const [consultationFee, setConsultationFee] = useState(doctor.consultation_fee ?? 0);
   const [city, setCity] = useState(doctor.city || '');
+  const [handle, setHandle] = useState(doctor.handle || '');
+  const [savedHandle, setSavedHandle] = useState(doctor.handle || '');
 
   // File upload states
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -32,6 +34,18 @@ export default function ProfileSettings({ doctor, language }: ProfileSettingsPro
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Synchronize state when doctor prop changes
+  React.useEffect(() => {
+    setFullName(doctor.full_name || '');
+    setSpecialization(doctor.specialization || '');
+    setClinicName(doctor.clinic_name || '');
+    setConsultationFee(doctor.consultation_fee ?? 0);
+    setCity(doctor.city || '');
+    setPreviewUrl(doctor.profile_image_url || '');
+    setHandle(doctor.handle || '');
+    setSavedHandle(doctor.handle || '');
+  }, [doctor]);
 
   // Password fields states
   const [newPassword, setNewPassword] = useState('');
@@ -75,6 +89,21 @@ export default function ProfileSettings({ doctor, language }: ProfileSettingsPro
     setLoading(true);
     setMessage(null);
     setUploadError(null);
+
+    // Validate handle format: lowercase only, letters, numbers, hyphens only, no spaces.
+    if (handle.trim() !== '') {
+      const handleRegex = /^[a-z0-9-]+$/;
+      if (!handleRegex.test(handle)) {
+        setMessage({
+          type: 'error',
+          text: isAr 
+            ? 'معرف رابط الحجز يجب أن يحتوي على أحرف صغيرة وأرقام وشرطة (-) فقط وبدون مسافات.' 
+            : 'Booking Link Handle must contain lowercase letters, numbers, and hyphens (-) only, with no spaces.'
+        });
+        setLoading(false);
+        return;
+      }
+    }
 
     let finalProfileImageUrl = doctor.profile_image_url || null;
 
@@ -127,7 +156,8 @@ export default function ProfileSettings({ doctor, language }: ProfileSettingsPro
           clinic_name: clinicName,
           consultation_fee: Number(consultationFee),
           city,
-          profile_image_url: finalProfileImageUrl
+          profile_image_url: finalProfileImageUrl,
+          handle: handle.trim() || null
         })
         .eq('id', doctor.id);
 
@@ -139,6 +169,7 @@ export default function ProfileSettings({ doctor, language }: ProfileSettingsPro
         type: 'success',
         text: isAr ? 'تم تحديث بيانات الطبيب بنجاح' : 'Doctor profile updated successfully',
       });
+      setSavedHandle(handle.trim());
       
       // Update global context state instantly
       if (refreshProfile) {
@@ -158,19 +189,33 @@ export default function ProfileSettings({ doctor, language }: ProfileSettingsPro
         error: err
       });
 
+      const isUniqueError = err?.code === '23505' || err?.message?.includes('duplicate key') || err?.message?.includes('unique constraint');
       const isMissingColumn = 
         err?.code === 'PGRST111' || 
         (err?.message && (
           err.message.toLowerCase().includes('profile_image_url') || 
+          err.message.toLowerCase().includes('handle') || 
           (err.message.toLowerCase().includes('column') && err.message.toLowerCase().includes('not found'))
         ));
 
-      if (isMissingColumn) {
+      if (isUniqueError) {
         setMessage({
           type: 'error',
-          text: isAr 
-            ? 'يجب إضافة حقل صورة الطبيب في قاعدة البيانات أولاً' 
-            : 'The doctor profile image column must be added to the database first',
+          text: isAr
+            ? 'معرف رابط الحجز مستخدم بالفعل من قبل طبيب آخر. يرجى اختيار معرف فريد.'
+            : 'This Booking Link Handle is already in use by another doctor. Please choose a unique handle.'
+        });
+      } else if (isMissingColumn) {
+        const isHandleMissing = err.message?.toLowerCase().includes('handle');
+        setMessage({
+          type: 'error',
+          text: isHandleMissing
+            ? (isAr 
+                ? 'يجب تشغيل ملف الهجرة لإضافة حقل معرف الحجز في قاعدة البيانات أولاً' 
+                : 'The doctor booking handle column must be added to the database first (run the migration script)')
+            : (isAr 
+                ? 'يجب إضافة حقل صورة الطبيب في قاعدة البيانات أولاً' 
+                : 'The doctor profile image column must be added to the database first'),
         });
       } else {
         setMessage({
@@ -293,32 +338,61 @@ export default function ProfileSettings({ doctor, language }: ProfileSettingsPro
             />
           </div>
 
-          {/* Direct Booking URL */}
+          {/* Direct Booking URL Display */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-slate-300 block text-right">
-              {isAr ? 'رابط الحجز المباشر (معرف الطبيب)' : 'Direct Booking URL (Doctor Handle)'}
+              {isAr ? 'رابط الحجز المباشر' : 'Direct Booking URL'}
             </label>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  const url = typeof window !== 'undefined' ? `${window.location.origin}/book/${doctor.handle || 'dr-ahmed'}` : `shifabook.com/book/${doctor.handle || 'dr-ahmed'}`;
-                  navigator.clipboard.writeText(url);
-                  if (typeof window !== 'undefined') {
-                    window.alert(isAr ? 'تم نسخ الرابط إلى الحافظة!' : 'Link copied to clipboard!');
-                  }
-                }}
-                className="px-4 py-3 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-300 text-xs font-bold hover:bg-teal-500/20 active:scale-95 transition-all whitespace-nowrap"
-              >
-                {isAr ? 'نسخ الرابط' : 'Copy Link'}
-              </button>
-              <input
-                type="text"
-                readOnly
-                value={typeof window !== 'undefined' ? `${window.location.origin}/book/${doctor.handle || 'dr-ahmed'}` : `shifabook.com/book/${doctor.handle || 'dr-ahmed'}`}
-                className="w-full px-4 py-3 rounded-xl bg-[#070e12] border border-teal-950/30 text-teal-400 text-sm transition-colors text-left font-mono"
-              />
-            </div>
+            {savedHandle ? (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const url = typeof window !== 'undefined' ? `${window.location.origin}/book/${savedHandle}` : `shifabook.com/book/${savedHandle}`;
+                    navigator.clipboard.writeText(url);
+                    if (typeof window !== 'undefined') {
+                      window.alert(isAr ? 'تم نسخ الرابط إلى الحافظة!' : 'Link copied to clipboard!');
+                    }
+                  }}
+                  className="px-4 py-3 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-300 text-xs font-bold hover:bg-teal-500/20 active:scale-95 transition-all whitespace-nowrap"
+                >
+                  {isAr ? 'نسخ الرابط' : 'Copy Link'}
+                </button>
+                <input
+                  type="text"
+                  readOnly
+                  value={typeof window !== 'undefined' ? `${window.location.origin}/book/${savedHandle}` : `shifabook.com/book/${savedHandle}`}
+                  className="w-full px-4 py-3 rounded-xl bg-[#070e12] border border-teal-950/30 text-teal-400 text-sm transition-colors text-left font-mono"
+                />
+              </div>
+            ) : (
+              <div className="p-3.5 rounded-xl border border-amber-500/25 bg-amber-500/10 text-amber-400 text-xs font-bold text-right">
+                {isAr ? 'لم يتم إعداد معرف الحجز للطبيب بعد' : 'Doctor booking handle is not configured yet'}
+              </div>
+            )}
+          </div>
+
+          {/* Editable Handle Field */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-300 block text-right">
+              {isAr ? 'معرف رابط الحجز' : 'Booking Link Handle'}
+            </label>
+            <input
+              type="text"
+              value={handle}
+              placeholder="dr-ahmed"
+              onChange={(e) => {
+                // Lowercase letters, numbers, hyphen only, no spaces.
+                const val = e.target.value.toLowerCase().replace(/\s+/g, '');
+                setHandle(val);
+              }}
+              className="w-full px-4 py-3 rounded-xl bg-[#09151e] border border-teal-950/60 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-teal-500 text-sm transition-colors text-right font-mono"
+            />
+            <p className="text-[10px] text-slate-500 text-right">
+              {isAr 
+                ? 'الأحرف الصغيرة، الأرقام، والشرطة (-) فقط. بدون مسافات.' 
+                : 'Lowercase letters, numbers, and hyphens (-) only. No spaces.'}
+            </p>
           </div>
 
           {/* Doctor Profile Photo Upload */}

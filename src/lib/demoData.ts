@@ -20,6 +20,7 @@ export interface DoctorProfile {
   hospitalEn: string;
   consultationFee?: number;
   city?: string;
+  handle?: string | null;
 }
 
 export interface ScheduleConfig {

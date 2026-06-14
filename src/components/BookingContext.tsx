@@ -476,6 +476,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     hospitalEn: doc.clinic_name,
     consultationFee: doc.consultation_fee,
     city: doc.city,
+    handle: doc.handle || null,
   });
 
   const fetchProfile = async () => {

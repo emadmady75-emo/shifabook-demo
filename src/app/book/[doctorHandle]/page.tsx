@@ -97,12 +97,7 @@ export default function DoctorPublicBookingPage() {
 
   // Convert handle to nice name for customization
   const getDoctorDisplayName = () => {
-    if (handle === 'dr-ahmed') {
-      return isAr ? doctorProfile.name : doctorProfile.nameEn;
-    }
-    // fallback or capitalize handle
-    const formatted = handle?.replace('-', ' ').replace(/\b\w/g, c => c.toUpperCase());
-    return formatted || (isAr ? doctorProfile.name : doctorProfile.nameEn);
+    return isAr ? doctorProfile.name : doctorProfile.nameEn;
   };
 
   const formatPeriodTime = (timeStr: string) => {
@@ -412,8 +407,8 @@ export default function DoctorPublicBookingPage() {
                 <a
                   href={`https://wa.me/201012345678?text=${encodeURIComponent(
                     isAr 
-                      ? `السلام عليكم، أنا المريض ${lastCompletedBooking.patientName}، أود تأكيد موعدي مع د. عبدالله المصري بتاريخ ${lastCompletedBooking.date} الساعة ${formatPeriodTime(lastCompletedBooking.timeSlot)} (رقم الحجز: ${lastCompletedBooking.id.substring(5, 12)}).`
-                      : `Hello, I am ${lastCompletedBooking.patientName}, confirming my appointment with Dr. Abdullah El-Masry on ${lastCompletedBooking.date} at ${formatPeriodTime(lastCompletedBooking.timeSlot)} (Ref: ${lastCompletedBooking.id.substring(5, 12)}).`
+                      ? `السلام عليكم، أنا المريض ${lastCompletedBooking.patientName}، أود تأكيد موعدي مع ${doctorProfile.name} بتاريخ ${lastCompletedBooking.date} الساعة ${formatPeriodTime(lastCompletedBooking.timeSlot)} (رقم الحجز: ${lastCompletedBooking.id.substring(5, 12)}).`
+                      : `Hello, I am ${lastCompletedBooking.patientName}, confirming my appointment with ${doctorProfile.nameEn} on ${lastCompletedBooking.date} at ${formatPeriodTime(lastCompletedBooking.timeSlot)} (Ref: ${lastCompletedBooking.id.substring(5, 12)}).`
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"
