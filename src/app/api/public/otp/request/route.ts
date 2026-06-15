@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { normalizePhone } from '@/lib/phone';
+import { isAppointmentInFutureOrNow } from '@/lib/dates';
 
 export async function POST(request: NextRequest) {
   try {
@@ -32,21 +33,24 @@ export async function POST(request: NextRequest) {
       // RC-2.0: Scope by doctor_id to prevent cross-doctor booking conflicts
       let otpQuery = supabase
         .from('appointments')
-        .select('id')
+        .select('id, appointment_date, appointment_time')
         .eq('patient_phone', normalizedPhone)
         .neq('status', 'cancelled')
         .gte('appointment_date', todayStr);
       if (doctorId) {
         otpQuery = otpQuery.eq('doctor_id', doctorId);
       }
-      const { data: activeAppts, error: dbError } = await otpQuery.limit(1);
+      const { data: activeAppts, error: dbError } = await otpQuery;
 
       if (dbError) {
         console.error('Server-side active booking check error:', dbError);
       } else if (activeAppts && activeAppts.length > 0) {
-        return NextResponse.json({ 
-          error: 'لديك حجز نشط بالفعل مسجل بهذا الرقم. يرجى إلغاء الموعد أو تعديله أولاً.' 
-        }, { status: 409 });
+        const hasRealActive = activeAppts.some(appt => isAppointmentInFutureOrNow(appt.appointment_date, appt.appointment_time));
+        if (hasRealActive) {
+          return NextResponse.json({ 
+            error: 'لديك حجز نشط بالفعل مسجل بهذا الرقم. يرجى إلغاء الموعد أو تعديله أولاً.' 
+          }, { status: 409 });
+        }
       }
     }
 
