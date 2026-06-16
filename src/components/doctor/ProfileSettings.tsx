@@ -25,6 +25,7 @@ export default function ProfileSettings({ doctor, language }: ProfileSettingsPro
   const [city, setCity] = useState(doctor.city || '');
   const [handle, setHandle] = useState(doctor.handle || '');
   const [savedHandle, setSavedHandle] = useState(doctor.handle || '');
+  const [clinicMapUrl, setClinicMapUrl] = useState(doctor.clinic_map_url || '');
 
   // File upload states
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -45,6 +46,7 @@ export default function ProfileSettings({ doctor, language }: ProfileSettingsPro
     setPreviewUrl(doctor.profile_image_url || '');
     setHandle(doctor.handle || '');
     setSavedHandle(doctor.handle || '');
+    setClinicMapUrl(doctor.clinic_map_url || '');
   }, [doctor]);
 
   // Password fields states
@@ -105,6 +107,20 @@ export default function ProfileSettings({ doctor, language }: ProfileSettingsPro
       }
     }
 
+    // Validate Google Maps Clinic Link: optional, but if entered, must start with http:// or https://
+    if (clinicMapUrl.trim() !== '') {
+      if (!/^https?:\/\//i.test(clinicMapUrl.trim())) {
+        setMessage({
+          type: 'error',
+          text: isAr 
+            ? 'رابط موقع العيادة يجب أن يبدأ بـ http:// أو https://' 
+            : 'Google Maps Clinic Link must start with http:// or https://'
+        });
+        setLoading(false);
+        return;
+      }
+    }
+
     let finalProfileImageUrl = doctor.profile_image_url || null;
 
     try {
@@ -157,7 +173,8 @@ export default function ProfileSettings({ doctor, language }: ProfileSettingsPro
           consultation_fee: Number(consultationFee),
           city,
           profile_image_url: finalProfileImageUrl,
-          handle: handle.trim() || null
+          handle: handle.trim() || null,
+          clinic_map_url: clinicMapUrl.trim() || null
         })
         .eq('id', doctor.id);
 
@@ -501,6 +518,20 @@ export default function ProfileSettings({ doctor, language }: ProfileSettingsPro
               value={city}
               onChange={(e) => setCity(e.target.value)}
               className="w-full px-4 py-3 rounded-xl bg-[#09151e] border border-teal-950/60 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-teal-500 text-sm transition-colors text-right"
+            />
+          </div>
+
+          {/* Google Maps Clinic Link */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-300 block">
+              {isAr ? 'رابط موقع العيادة على خرائط Google' : 'Google Maps Clinic Link'}
+            </label>
+            <input
+              type="url"
+              placeholder={isAr ? 'مثال: https://maps.google.com/?q=...' : 'Example: https://maps.google.com/?q=...'}
+              value={clinicMapUrl}
+              onChange={(e) => setClinicMapUrl(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl bg-[#09151e] border border-teal-950/60 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-teal-500 text-sm transition-colors text-right font-sans"
             />
           </div>
 

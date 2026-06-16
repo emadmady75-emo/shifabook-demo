@@ -17,6 +17,7 @@ export interface SupabaseDoctor {
   profile_image_url?: string;
   clinic_id?: string | null;
   handle?: string | null;
+  clinic_map_url?: string | null;
 }
 
 // Define TS-safe interface for Appointments from Supabase

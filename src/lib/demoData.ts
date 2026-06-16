@@ -26,6 +26,7 @@ export interface DoctorProfile {
   endTime?: string;
   slotDurationMinutes?: number;
   capacityPerSlot?: number;
+  clinicMapUrl?: string | null;
 }
 
 export interface ScheduleConfig {

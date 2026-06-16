@@ -172,7 +172,7 @@ function DoctorBookingPageContent() {
     nameEn: doctorProfile?.hospitalEn || 'Clinic',
     address: doctorProfile?.city ? (isAr ? `فرع ${doctorProfile.city}` : `${doctorProfile.city} Branch`) : '',
     addressEn: doctorProfile?.city ? `${doctorProfile.city} Branch` : '',
-    mapUrl: '#'
+    mapUrl: doctorProfile?.clinicMapUrl || '#'
   };
 
   const facilityName = isAr ? (facility.name || '') : (facility.nameEn || '');
