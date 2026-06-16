@@ -44,6 +44,14 @@ export default function ScheduleBuilder() {
   const [workingDays, setWorkingDays] = useState<number[]>(scheduleConfig.workingDays);
   const [success, setSuccess] = useState(false);
 
+  useEffect(() => {
+    setStartTime(scheduleConfig.startTime);
+    setEndTime(scheduleConfig.endTime);
+    setSlotDuration(scheduleConfig.slotDurationMinutes);
+    setCapacity(scheduleConfig.capacityPerSlot);
+    setWorkingDays(scheduleConfig.workingDays);
+  }, [scheduleConfig]);
+
   // States for Blocked Slots
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     const today = new Date();

@@ -477,6 +477,11 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     consultationFee: doc.consultation_fee,
     city: doc.city,
     handle: doc.handle || null,
+    workingDays: doc.working_days || [0, 1, 2, 3, 4],
+    startTime: doc.start_time || '09:00',
+    endTime: doc.end_time || '17:00',
+    slotDurationMinutes: doc.slot_duration || 30,
+    capacityPerSlot: doc.capacity_per_slot || 1,
   });
 
   const fetchProfile = async () => {
@@ -570,7 +575,16 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const mappedDoctors = doctors.map(mapDocRow);
             setClinicDoctors(mappedDoctors);
             // Auto-select first doctor (doctor selector is RC-2.1)
-            setDoctorProfile(mappedDoctors[0]);
+            const firstDoc = mappedDoctors[0];
+            setDoctorProfile(firstDoc);
+            setScheduleConfig({
+              workingDays: firstDoc.workingDays || [0, 1, 2, 3, 4],
+              startTime: firstDoc.startTime || '09:00',
+              endTime: firstDoc.endTime || '17:00',
+              slotDurationMinutes: firstDoc.slotDurationMinutes || 30,
+              capacityPerSlot: firstDoc.capacityPerSlot || 1,
+              pricePerAppointment: firstDoc.consultationFee ?? 450
+            });
             doctorLoaded = true;
           }
         } catch (clinicErr) {
@@ -586,6 +600,14 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           const mapped = mapDocRow(data[0]);
           setDoctorProfile(mapped);
           setClinicDoctors([mapped]);
+          setScheduleConfig({
+            workingDays: mapped.workingDays || [0, 1, 2, 3, 4],
+            startTime: mapped.startTime || '09:00',
+            endTime: mapped.endTime || '17:00',
+            slotDurationMinutes: mapped.slotDurationMinutes || 30,
+            capacityPerSlot: mapped.capacityPerSlot || 1,
+            pricePerAppointment: mapped.consultationFee ?? 450
+          });
         }
       }
     } catch (err) {
@@ -617,24 +639,12 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     // Clear legacy shifabook_bookings key
     localStorage.removeItem('shifabook_bookings');
 
-    const storedConfig = localStorage.getItem('shifabook_config');
+    // Completely ignore and remove localStorage config for operational settings
+    localStorage.removeItem('shifabook_config');
     const storedActiveId = localStorage.getItem('shifabook_active_booking');
     const storedActiveBooking = localStorage.getItem('shifabook_active_booking_details');
     const storedLang = localStorage.getItem('shifabook_lang');
     const storedFacility = localStorage.getItem('shifabook_facility');
-
-    if (storedConfig) {
-      try {
-        const parsed = JSON.parse(storedConfig);
-        if (parsed && typeof parsed === 'object' && Array.isArray(parsed.workingDays) && parsed.startTime && parsed.endTime) {
-          setScheduleConfig(parsed);
-        } else {
-          console.warn('Invalid stored schedule config structure in localStorage, keeping default.');
-        }
-      } catch (e) {
-        console.error('Failed to parse stored config:', e);
-      }
-    }
 
     let parsedActiveBooking: PatientBooking | null = null;
     let validActiveId: string | null = null;
@@ -707,9 +717,45 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
   }, []);
 
-  const saveConfig = (newConfig: ScheduleConfig) => {
+  const saveConfig = async (newConfig: ScheduleConfig) => {
     setScheduleConfig(newConfig);
-    localStorage.setItem('shifabook_config', JSON.stringify(newConfig));
+    localStorage.removeItem('shifabook_config');
+
+    if (doctorProfile?.id) {
+      try {
+        const { createClient } = await import('@/lib/supabase/client');
+        const supabase = createClient();
+        const { error } = await supabase
+          .from('doctors')
+          .update({
+            working_days: newConfig.workingDays,
+            start_time: newConfig.startTime,
+            end_time: newConfig.endTime,
+            slot_duration: newConfig.slotDurationMinutes,
+            capacity_per_slot: newConfig.capacityPerSlot,
+            consultation_fee: newConfig.pricePerAppointment
+          })
+          .eq('id', doctorProfile.id);
+
+        if (error) {
+          console.error('Failed to save schedule config to Supabase:', error.message);
+        } else {
+          console.log('Successfully saved schedule config to Supabase.');
+          // Keep doctorProfile state in sync
+          setDoctorProfile(prev => prev ? {
+            ...prev,
+            workingDays: newConfig.workingDays,
+            startTime: newConfig.startTime,
+            endTime: newConfig.endTime,
+            slotDurationMinutes: newConfig.slotDurationMinutes,
+            capacityPerSlot: newConfig.capacityPerSlot,
+            consultationFee: newConfig.pricePerAppointment
+          } : null);
+        }
+      } catch (err) {
+        console.error('Error in saveConfig:', err);
+      }
+    }
   };
 
   const saveActiveId = (id: string | null) => {
@@ -1272,6 +1318,14 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (data) {
         const mapped = mapDocRow(data);
         setDoctorProfile(mapped);
+        setScheduleConfig({
+          workingDays: mapped.workingDays || [0, 1, 2, 3, 4],
+          startTime: mapped.startTime || '09:00',
+          endTime: mapped.endTime || '17:00',
+          slotDurationMinutes: mapped.slotDurationMinutes || 30,
+          capacityPerSlot: mapped.capacityPerSlot || 1,
+          pricePerAppointment: mapped.consultationFee ?? 450
+        });
 
         if (data.clinic_id) {
           try {

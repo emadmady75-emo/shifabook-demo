@@ -21,6 +21,11 @@ export interface DoctorProfile {
   consultationFee?: number;
   city?: string;
   handle?: string | null;
+  workingDays?: number[];
+  startTime?: string;
+  endTime?: string;
+  slotDurationMinutes?: number;
+  capacityPerSlot?: number;
 }
 
 export interface ScheduleConfig {
