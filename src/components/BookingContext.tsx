@@ -771,6 +771,11 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const updateScheduleConfig = (config: Partial<ScheduleConfig>) => {
+    if (clinicUser && !['admin', 'supervisor'].includes(clinicUser.role)) {
+      const errorMsg = language === 'ar' ? "ليس لديك صلاحية لتنفيذ هذا الإجراء." : "You do not have permission to perform this action.";
+      console.error(errorMsg);
+      return;
+    }
     const updated = { ...scheduleConfig, ...config };
     saveConfig(updated);
   };

@@ -37,9 +37,11 @@ export default function ScheduleBuilder({ activeSection = 'schedule' }: Schedule
     isExceptionsTableActive,
     createBlockedSlots,
     deleteBlockedSlot,
-    generateTimeSlotsForDate
+    generateTimeSlotsForDate,
+    clinicUser
   } = useBooking();
   const isAr = language === 'ar';
+  const canManageWeeklySchedule = clinicUser?.role === 'admin' || clinicUser?.role === 'supervisor';
 
   const [startTime, setStartTime] = useState(scheduleConfig.startTime);
   const [endTime, setEndTime] = useState(scheduleConfig.endTime);
@@ -92,6 +94,9 @@ export default function ScheduleBuilder({ activeSection = 'schedule' }: Schedule
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canManageWeeklySchedule) {
+      return;
+    }
     setSuccess(false);
 
     updateScheduleConfig({
@@ -206,7 +211,8 @@ export default function ScheduleBuilder({ activeSection = 'schedule' }: Schedule
     <div className="space-y-8">
       
       {/* Weekly operating schedule builder form */}
-      <div className={`glass-panel rounded-3xl p-6 border border-teal-500/20 text-right space-y-6 ${activeSection === 'schedule' ? '' : 'hidden'}`}>
+      {canManageWeeklySchedule && (
+        <div className={`glass-panel rounded-3xl p-6 border border-teal-500/20 text-right space-y-6 ${activeSection === 'schedule' ? '' : 'hidden'}`}>
         <div>
           <h3 className="text-lg font-black text-white">
             {isAr ? 'تعديل وتحديث جدول العيادة الأسبوعي' : 'Update Clinic Weekly Operating Schedule'}
@@ -323,6 +329,7 @@ export default function ScheduleBuilder({ activeSection = 'schedule' }: Schedule
           </button>
         </form>
       </div>
+      )}
 
       {/* Blocked Slots Exceptions Management Section */}
       <div className={activeSection === 'blocked' ? '' : 'hidden'}>

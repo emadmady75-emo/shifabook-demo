@@ -125,10 +125,11 @@ export default function DoctorDashboardClient({ doctor, initialAppointments }: D
   const showSchedule = clinicUser?.role === 'admin' || clinicUser?.role === 'supervisor' || clinicUser?.role === 'reception';
   const showProfileSettings = clinicUser?.role === 'admin';
   const showSidebar = showSchedule || showProfileSettings;
+  const canManageWeeklySchedule = clinicUser?.role === 'admin' || clinicUser?.role === 'supervisor';
 
   const settingsTabs = [
     ...(showSchedule ? [
-      { id: 'schedule', labelAr: 'جدول العيادة', labelEn: 'Clinic Schedule' },
+      ...(canManageWeeklySchedule ? [{ id: 'schedule', labelAr: 'جدول العيادة', labelEn: 'Clinic Schedule' }] : []),
       { id: 'blocked', labelAr: 'إيقاف المواعيد', labelEn: 'Blocked Slots' }
     ] : []),
     ...(showProfileSettings ? [
@@ -138,9 +139,15 @@ export default function DoctorDashboardClient({ doctor, initialAppointments }: D
   ];
 
   useEffect(() => {
-    if (activeSettingsTab === 'profile' || activeSettingsTab === 'password') {
+    if (activeSettingsTab === 'schedule' && !canManageWeeklySchedule) {
+      if (showSchedule) {
+        setActiveSettingsTab('blocked');
+      } else if (showProfileSettings) {
+        setActiveSettingsTab('profile');
+      }
+    } else if (activeSettingsTab === 'profile' || activeSettingsTab === 'password') {
       if (!showProfileSettings) {
-        setActiveSettingsTab('schedule');
+        setActiveSettingsTab(canManageWeeklySchedule ? 'schedule' : 'blocked');
       }
     } else if (activeSettingsTab === 'schedule' || activeSettingsTab === 'blocked') {
       if (!showSchedule) {
@@ -149,7 +156,7 @@ export default function DoctorDashboardClient({ doctor, initialAppointments }: D
         }
       }
     }
-  }, [showSchedule, showProfileSettings, activeSettingsTab]);
+  }, [showSchedule, showProfileSettings, activeSettingsTab, canManageWeeklySchedule]);
 
   const getRoleLabel = (role?: string) => {
     if (!role) return '';
