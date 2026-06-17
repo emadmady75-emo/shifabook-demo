@@ -282,7 +282,7 @@ interface BookingContextType {
   setPhoneVerified: (val: boolean) => void;
   checkPhoneBookings: (phone: string) => Promise<{ activeBooking: PatientBooking | null; patientName: string }>;
   refreshAppointments: () => Promise<void>;
-  refreshProfile?: () => Promise<void>;
+  refreshProfile?: (showLoader?: boolean) => Promise<void>;
   clinicUser: ClinicUser | null;
   isLoadingProfile?: boolean;
   scheduleExceptions: ScheduleException[];
@@ -485,8 +485,10 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     clinicMapUrl: doc.clinic_map_url || null,
   });
 
-  const fetchProfile = async () => {
-    setIsLoadingProfile(true);
+  const fetchProfile = async (showLoader = false) => {
+    if (showLoader) {
+      setIsLoadingProfile(true);
+    }
     try {
       const { createClient } = await import('@/lib/supabase/client');
       const supabase = createClient();
@@ -626,13 +628,13 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Load from localStorage on mount
   useEffect(() => {
-    fetchProfile();
+    fetchProfile(true);
 
     let authSub: any = null;
     import('@/lib/supabase/client').then(({ createClient }) => {
       const client = createClient();
       const { data } = client.auth.onAuthStateChange(() => {
-        fetchProfile();
+        fetchProfile(false);
       });
       authSub = data.subscription;
     });
