@@ -23,6 +23,7 @@ interface DoctorDashboardClientProps {
 export default function DoctorDashboardClient({ doctor, initialAppointments }: DoctorDashboardClientProps) {
   const { language, doctorProfile, setBookings, setIsLoadingAvailability, clinicUser, refreshProfile, isLoadingProfile } = useBooking();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'crm' | 'users' | 'finance'>('dashboard');
+  const [activeSettingsTab, setActiveSettingsTab] = useState<'schedule' | 'blocked' | 'profile' | 'password'>('schedule');
   const isAr = language === 'ar';
   const router = useRouter();
   const supabase = createClient();
@@ -124,6 +125,31 @@ export default function DoctorDashboardClient({ doctor, initialAppointments }: D
   const showSchedule = clinicUser?.role === 'admin' || clinicUser?.role === 'supervisor' || clinicUser?.role === 'reception';
   const showProfileSettings = clinicUser?.role === 'admin';
   const showSidebar = showSchedule || showProfileSettings;
+
+  const settingsTabs = [
+    ...(showSchedule ? [
+      { id: 'schedule', labelAr: 'جدول العيادة', labelEn: 'Clinic Schedule' },
+      { id: 'blocked', labelAr: 'إيقاف المواعيد', labelEn: 'Blocked Slots' }
+    ] : []),
+    ...(showProfileSettings ? [
+      { id: 'profile', labelAr: 'ملف الطبيب', labelEn: 'Doctor Profile' },
+      { id: 'password', labelAr: 'كلمة المرور', labelEn: 'Password' }
+    ] : [])
+  ];
+
+  useEffect(() => {
+    if (activeSettingsTab === 'profile' || activeSettingsTab === 'password') {
+      if (!showProfileSettings) {
+        setActiveSettingsTab('schedule');
+      }
+    } else if (activeSettingsTab === 'schedule' || activeSettingsTab === 'blocked') {
+      if (!showSchedule) {
+        if (showProfileSettings) {
+          setActiveSettingsTab('profile');
+        }
+      }
+    }
+  }, [showSchedule, showProfileSettings, activeSettingsTab]);
 
   const getRoleLabel = (role?: string) => {
     if (!role) return '';
@@ -288,9 +314,34 @@ export default function DoctorDashboardClient({ doctor, initialAppointments }: D
                 
                 {/* Left Column: Weekly Schedule Configuration Builder Form & Profile Settings */}
                 {showSidebar && (
-                  <div className="xl:col-span-4 xl:sticky xl:top-24 space-y-8 max-h-[calc(100vh-8rem)] overflow-y-auto custom-scrollbar pr-1">
-                    {showSchedule && <ScheduleBuilder />}
-                    {showProfileSettings && <ProfileSettings doctor={doctor} language={language} />}
+                  <div className="xl:col-span-4 xl:sticky xl:top-24 space-y-6 max-h-[calc(100vh-8rem)] overflow-y-auto custom-scrollbar pr-1">
+                    
+                    {/* Internal Settings Tabs */}
+                    <div 
+                      className="flex overflow-x-auto gap-2 p-1.5 glass-panel rounded-2xl border border-teal-500/10 no-scrollbar scroll-smooth whitespace-nowrap"
+                      dir={isAr ? 'rtl' : 'ltr'}
+                    >
+                      {settingsTabs.map((tab) => {
+                        const isActive = activeSettingsTab === tab.id;
+                        return (
+                          <button
+                            key={tab.id}
+                            type="button"
+                            onClick={() => setActiveSettingsTab(tab.id as any)}
+                            className={`px-4 py-2.5 text-xs font-black rounded-xl border transition-all duration-200 flex-shrink-0 select-none ${
+                              isActive
+                                ? 'bg-gradient-to-tr from-teal-500 to-teal-600 border-teal-400 text-[#070e12] shadow-md shadow-teal-500/10'
+                                : 'bg-teal-950/10 border-teal-950 text-slate-400 hover:text-slate-200 hover:border-teal-500/20'
+                            }`}
+                          >
+                            {isAr ? tab.labelAr : tab.labelEn}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {showSchedule && <ScheduleBuilder activeSection={activeSettingsTab} />}
+                    {showProfileSettings && <ProfileSettings doctor={doctor} language={language} activeSection={activeSettingsTab} />}
                   </div>
                 )}
 

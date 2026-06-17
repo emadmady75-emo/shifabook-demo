@@ -23,7 +23,11 @@ const REASONS_EN = [
   { label: 'Other', value: 'other' }
 ];
 
-export default function ScheduleBuilder() {
+interface ScheduleBuilderProps {
+  activeSection?: 'schedule' | 'blocked';
+}
+
+export default function ScheduleBuilder({ activeSection = 'schedule' }: ScheduleBuilderProps = {}) {
   const { 
     language, 
     scheduleConfig, 
@@ -202,7 +206,7 @@ export default function ScheduleBuilder() {
     <div className="space-y-8">
       
       {/* Weekly operating schedule builder form */}
-      <div className="glass-panel rounded-3xl p-6 border border-teal-500/20 text-right space-y-6">
+      <div className={`glass-panel rounded-3xl p-6 border border-teal-500/20 text-right space-y-6 ${activeSection === 'schedule' ? '' : 'hidden'}`}>
         <div>
           <h3 className="text-lg font-black text-white">
             {isAr ? 'تعديل وتحديث جدول العيادة الأسبوعي' : 'Update Clinic Weekly Operating Schedule'}
@@ -321,8 +325,9 @@ export default function ScheduleBuilder() {
       </div>
 
       {/* Blocked Slots Exceptions Management Section */}
-      {!isExceptionsTableActive ? (
-        <div className="glass-panel rounded-3xl p-6 border border-rose-500/20 text-right space-y-4">
+      <div className={activeSection === 'blocked' ? '' : 'hidden'}>
+        {!isExceptionsTableActive ? (
+          <div className="glass-panel rounded-3xl p-6 border border-rose-500/20 text-right space-y-4">
           <div>
             <h3 className="text-lg font-black text-white">
               {isAr ? 'إيقاف مواعيد داخل الجدول' : 'Blocked Slots'}
@@ -534,6 +539,7 @@ export default function ScheduleBuilder() {
           )}
         </div>
       )}
+      </div>
 
     </div>
   );

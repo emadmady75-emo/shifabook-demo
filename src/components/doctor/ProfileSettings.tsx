@@ -9,9 +9,10 @@ import { useBooking } from '@/components/BookingContext';
 interface ProfileSettingsProps {
   doctor: SupabaseDoctor;
   language: 'ar' | 'en';
+  activeSection?: 'profile' | 'password';
 }
 
-export default function ProfileSettings({ doctor, language }: ProfileSettingsProps) {
+export default function ProfileSettings({ doctor, language, activeSection = 'profile' }: ProfileSettingsProps) {
   const isAr = language === 'ar';
   const router = useRouter();
   const supabase = createClient();
@@ -302,7 +303,7 @@ export default function ProfileSettings({ doctor, language }: ProfileSettingsPro
   return (
     <div className="space-y-8">
       {/* Profile Settings Card */}
-      <div className="glass-panel rounded-3xl p-6 border border-teal-500/20 text-right space-y-6">
+      <div className={`glass-panel rounded-3xl p-6 border border-teal-500/20 text-right space-y-6 ${activeSection === 'profile' ? '' : 'hidden'}`}>
         <div>
           <h3 className="text-lg font-black text-white">
             {isAr ? 'إعدادات ملف الطبيب' : 'Doctor Profile Settings'}
@@ -546,7 +547,7 @@ export default function ProfileSettings({ doctor, language }: ProfileSettingsPro
       </div>
 
       {/* Change Password Card */}
-      <div className="glass-panel rounded-3xl p-6 border border-teal-500/20 text-right space-y-6">
+      <div className={`glass-panel rounded-3xl p-6 border border-teal-500/20 text-right space-y-6 ${activeSection === 'password' ? '' : 'hidden'}`}>
         <div>
           <h3 className="text-lg font-black text-white">
             {isAr ? 'تغيير كلمة المرور' : 'Change Password'}
