@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useBooking, PatientBooking, WhatsAppEvent, getQueueCode, FollowUpOptions } from '../BookingContext';
-import { formatDateOnly } from '@/lib/dates';
+import { formatDateOnly, parseDateOnlySafe } from '@/lib/dates';
 import PatientPhoneLink from './PatientPhoneLink';
 
 export default function AppointmentsList() {
@@ -68,8 +68,23 @@ export default function AppointmentsList() {
     e.preventDefault();
     if (!followUpParent || !followUpTime) return;
 
-    setFollowUpLoading(true);
     setFollowUpError('');
+
+    const todayStr = formatDateOnly(new Date());
+    if (followUpDate < todayStr) {
+      setFollowUpError(isAr ? 'لا يمكن حجز موعد في الماضي.' : 'Past dates are not allowed.');
+      return;
+    }
+
+    const dateObj = parseDateOnlySafe(followUpDate);
+    const dayOfWeek = dateObj.getDay();
+    const isWorkingDay = scheduleConfig?.workingDays?.includes(dayOfWeek) ?? true;
+    if (!isWorkingDay) {
+      setFollowUpError(isAr ? 'هذا اليوم خارج أيام عمل العيادة' : 'This day is outside clinic working days');
+      return;
+    }
+
+    setFollowUpLoading(true);
 
     try {
       const options: FollowUpOptions = {
@@ -943,24 +958,17 @@ export default function AppointmentsList() {
               {/* Date Selector */}
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-300 block text-right">
-                  {isAr ? 'تاريخ موعد المتابعة:' : 'Follow-Up Date:'}
+                  {isAr ? 'تاريخ موعد المتابعة' : 'Follow-up appointment date'}
                 </label>
-                <select
+                <input
+                  type="date"
+                  min={formatDateOnly(new Date())}
                   value={followUpDate}
                   onChange={(e) => { setFollowUpDate(e.target.value); setFollowUpTime(null); }}
-                  className="w-full bg-[#09151e] border border-cyan-950 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500 transition-colors cursor-pointer text-right font-bold"
-                >
-                  {rescheduleDays.map((date) => {
-                    const dateStr = formatDateOnly(date);
-                    const dayOfWeek = date.getDay();
-                    const isWorkingDay = scheduleConfig?.workingDays?.includes(dayOfWeek) ?? true;
-                    return (
-                      <option key={dateStr} value={dateStr} disabled={!isWorkingDay} className="bg-slate-950 text-white">
-                        {dateStr} - {getDayName(date)} ({isWorkingDay ? (isAr ? 'متاح' : 'Available') : (isAr ? 'مغلق' : 'Closed')})
-                      </option>
-                    );
-                  })}
-                </select>
+                  placeholder={isAr ? 'اختر تاريخ المتابعة' : 'Select follow-up date'}
+                  title={isAr ? 'اختر تاريخ المتابعة' : 'Select follow-up date'}
+                  className="w-full bg-[#09151e] border border-cyan-950 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500 transition-colors cursor-pointer text-right font-bold font-sans"
+                />
               </div>
 
               {/* Time Slot Grid */}
@@ -970,10 +978,23 @@ export default function AppointmentsList() {
                 </label>
                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[180px] overflow-y-auto p-1 custom-scrollbar border border-cyan-950 bg-[#060d13]/55 rounded-2xl" dir="ltr">
                   {(() => {
+                    if (!followUpDate) return null;
+                    const dateObj = parseDateOnlySafe(followUpDate);
+                    const dayOfWeek = dateObj.getDay();
+                    const isWorkingDay = scheduleConfig?.workingDays?.includes(dayOfWeek) ?? true;
+
+                    if (!isWorkingDay) {
+                      return (
+                        <div className="col-span-full text-center py-8 text-rose-400 text-xs font-bold">
+                          {isAr ? 'هذا اليوم خارج أيام عمل العيادة' : 'This day is outside clinic working days'}
+                        </div>
+                      );
+                    }
+
                     const slots = generateTimeSlotsForDate(followUpDate);
                     if (slots.length === 0) {
                       return (
-                        <div className="col-span-full text-center py-8 text-slate-500 text-xs">
+                        <div className="col-span-full text-center py-8 text-slate-500 text-xs font-semibold">
                           {isAr ? 'العيادة مغلقة هذا اليوم' : 'Clinic Closed'}
                         </div>
                       );
