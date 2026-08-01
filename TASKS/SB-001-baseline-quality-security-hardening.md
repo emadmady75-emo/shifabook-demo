@@ -136,7 +136,7 @@ A clean checkout installs and passes non-interactive typecheck, lint, tests, sec
 
 ## Rollback
 
-Revert the bounded implementation commit to local governance baseline `fa92d8b`, or restore package.json, package-lock.json, config, tests, source type fixes, and CI workflow from application baseline `6e2ecf0`. No database or production rollback is required because migrations and deployment are prohibited.
+Roll back implementation by reverting the bounded implementation commit(s), preserving the committed READY/control-plane baseline and Product Owner approval history. If file-level restoration is required, restore only implementation-touched application files from application baseline `6e2ecf0`. No database or production rollback is required because migrations and deployment are prohibited.
 
 ## Stop conditions
 

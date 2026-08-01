@@ -13,4 +13,4 @@
 - Dependency tree proof: `npm ls next postcss sharp`
 - Secret scan: `npm run secrets:scan` using committed Secretlint configuration; no external source upload
 
-Task `SB-001` is `SCOPE_APPROVED`, not READY, while its expanded dependencies/metadata propagation await Product Owner reapproval and the Git/permission preflight remains incomplete. Until SB-001 is green, feature tasks remain blocked.
+Task `SB-001` is `SCOPE_APPROVED`, not READY. Product Owner reapproval and the clean local governance baseline are complete; final specification re-review is pending. Antigravity permission/Always On/overages preflight remains mandatory before IN_PROGRESS. Until SB-001 is green, feature tasks remain blocked.
