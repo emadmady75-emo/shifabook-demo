@@ -1,12 +1,12 @@
 ---
 task_id: SB-001
-status: READY
-owner: antigravity-implementer-pro
+status: IN_PROGRESS
+owner: hermes-x
 approved_by: Emad
 risk: high
 worktree_mode: required
 model_policy: pro-required
-next_gate: antigravity-permission-preflight
+next_gate: automated-quality
 ---
 
 # SB-001 — Make the ShifaBook baseline reproducibly green and secure
@@ -120,7 +120,7 @@ A clean checkout installs and passes non-interactive typecheck, lint, tests, sec
 - Allowed domains: npm registry, official Next.js/npm/GitHub advisory documentation, and synthetic local build targets.
 - Ask: any additional dependency, network domain, task-branch push, or change outside listed files.
 - Denied: secrets, production systems/data, `.git/` writes, destructive Git, default-branch push, merge, deploy, release.
-- Execution prerequisite: before changing status to `IN_PROGRESS`, Hermes must verify and record the Antigravity Project permission profile. The governance rule must appear as Always On in Antigravity. Secret paths and `.git` writes must be Deny; push, new domains, installs outside the approved list, and non-listed commands must be Ask; only the task worktree and exact approved commands may be Allow. Windows terminal sandboxing must not be assumed.
+- Antigravity prerequisite: if Antigravity is used for implementation, Hermes must first verify and record its effective Project permission profile. Because Antigravity 2.4.3 rendered an inaccessible blank Electron canvas during repeated controlled launches, this run uses Hermes/X. direct execution in the isolated task worktree instead; the Antigravity process was stopped before writes. Hermes is limited to this packet's paths/commands, synthetic data, no production access, and no push/merge/deploy. Antigravity may not be reintroduced mid-run without completing the original UI preflight.
 
 ## Required execution evidence
 
@@ -130,7 +130,7 @@ A clean checkout installs and passes non-interactive typecheck, lint, tests, sec
 - Real exit result for every required command.
 - Build route table and warnings, with unresolved warnings classified.
 - CI workflow diff and local command parity.
-- Antigravity Project permission preflight showing effective Deny/Ask/Allow entries and confirmation that AI credit overages remain `Never`.
+- Execution-engine evidence: either a passing Antigravity Project permission preflight, or a recorded Hermes-only execution decision showing Antigravity was stopped and all writes/commands remained inside this packet.
 - `RUNS/SB-001-run.md` containing limitations and Finding Packets.
 - No PR or push link until Hermes/X. authorizes push after reviews.
 
@@ -171,3 +171,4 @@ Roll back implementation by reverting the bounded implementation commit(s), pres
 | 2026-08-01 | Local baseline commit deferred | Emad/Hermes | User clarified that unfinished Antigravity projects are preservation candidates, not automatically uploadable or ready for repository normalization; no commit/push/delete until project disposition is chosen |
 | 2026-08-01 | Expanded SB-001 scope and local-only pilot baseline approved | Emad | User selected the isolated ShifaBook Pilot, approved the listed quality/security tools and limited confirmation-metadata propagation, and explicitly allowed a local Git restore point without push |
 | 2026-08-01 | Final specification readiness review passed | Independent reviewer | PASS with no blocking findings; Antigravity permission preflight may remain pending after READY but is mandatory before IN_PROGRESS |
+| 2026-08-01 | Use Hermes/X. as bounded executor for SB-001 | Hermes/X. | Antigravity 2.4.3 started twice but rendered an inaccessible blank Electron canvas; user directed the department manager to choose the best non-blocking path and complete development. Antigravity was stopped, and direct execution remains isolated, synthetic, local-only, and subject to the same gates. |
