@@ -2,7 +2,7 @@
 task_id: SB-001
 status: SCOPE_APPROVED
 owner: antigravity-implementer-pro
-approved_by: pending-reapproval
+approved_by: Emad
 risk: high
 worktree_mode: required
 model_policy: pro-required
@@ -17,7 +17,7 @@ Create a trustworthy delivery baseline so future ShifaBook features cannot pass 
 
 ## Current behavior
 
-Verified on clean worktree `D:\FastTech-Worktrees\shifabook-pilot` at commit `6e2ecf0`:
+Application behavior was verified from commit `6e2ecf0`. Software Delivery OS controls and this Task Packet were preserved in the local-only governance baseline commit `fa92d8b`; no push occurred:
 
 - `npm ci --no-audit --no-fund` passes.
 - `npx tsc --noEmit --incremental false` fails with five errors across three files.
@@ -136,7 +136,7 @@ A clean checkout installs and passes non-interactive typecheck, lint, tests, sec
 
 ## Rollback
 
-Revert the bounded Task Packet commit or restore package.json, package-lock.json, config, tests, source type fixes, and CI workflow from baseline commit `6e2ecf0`. No database or production rollback is required because migrations and deployment are prohibited.
+Revert the bounded implementation commit to local governance baseline `fa92d8b`, or restore package.json, package-lock.json, config, tests, source type fixes, and CI workflow from application baseline `6e2ecf0`. No database or production rollback is required because migrations and deployment are prohibited.
 
 ## Stop conditions
 
@@ -151,7 +151,7 @@ Revert the bounded Task Packet commit or restore package.json, package-lock.json
 
 ## Review sequence
 
-- [ ] Expanded Scope reapproved by Product Owner
+- [x] Expanded Scope reapproved by Product Owner
 - [ ] Specification review passed
 - [ ] Automated quality gates passed
 - [ ] Code-quality review passed
@@ -169,3 +169,4 @@ Revert the bounded Task Packet commit or restore package.json, package-lock.json
 | 2026-08-01 | Pro-required model policy | Hermes/X. | Dependency advisories, CI, auth-adjacent middleware, and cross-cutting baseline risk |
 | 2026-08-01 | Status returned to SCOPE_APPROVED | Hermes/X. | Independent specification review found baseline, dependency, permission, and reproducibility blockers; Antigravity execution remains prohibited pending remediation and Product Owner reapproval |
 | 2026-08-01 | Local baseline commit deferred | Emad/Hermes | User clarified that unfinished Antigravity projects are preservation candidates, not automatically uploadable or ready for repository normalization; no commit/push/delete until project disposition is chosen |
+| 2026-08-01 | Expanded SB-001 scope and local-only pilot baseline approved | Emad | User selected the isolated ShifaBook Pilot, approved the listed quality/security tools and limited confirmation-metadata propagation, and explicitly allowed a local Git restore point without push |
