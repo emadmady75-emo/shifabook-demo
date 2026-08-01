@@ -1,12 +1,12 @@
 ---
 task_id: SB-001
-status: SCOPE_APPROVED
+status: READY
 owner: antigravity-implementer-pro
 approved_by: Emad
 risk: high
 worktree_mode: required
 model_policy: pro-required
-next_gate: specification-remediation
+next_gate: antigravity-permission-preflight
 ---
 
 # SB-001 — Make the ShifaBook baseline reproducibly green and secure
@@ -152,7 +152,7 @@ Roll back implementation by reverting the bounded implementation commit(s), pres
 ## Review sequence
 
 - [x] Expanded Scope reapproved by Product Owner
-- [ ] Specification review passed
+- [x] Specification review passed
 - [ ] Automated quality gates passed
 - [ ] Code-quality review passed
 - [ ] Security review passed
@@ -170,3 +170,4 @@ Roll back implementation by reverting the bounded implementation commit(s), pres
 | 2026-08-01 | Status returned to SCOPE_APPROVED | Hermes/X. | Independent specification review found baseline, dependency, permission, and reproducibility blockers; Antigravity execution remains prohibited pending remediation and Product Owner reapproval |
 | 2026-08-01 | Local baseline commit deferred | Emad/Hermes | User clarified that unfinished Antigravity projects are preservation candidates, not automatically uploadable or ready for repository normalization; no commit/push/delete until project disposition is chosen |
 | 2026-08-01 | Expanded SB-001 scope and local-only pilot baseline approved | Emad | User selected the isolated ShifaBook Pilot, approved the listed quality/security tools and limited confirmation-metadata propagation, and explicitly allowed a local Git restore point without push |
+| 2026-08-01 | Final specification readiness review passed | Independent reviewer | PASS with no blocking findings; Antigravity permission preflight may remain pending after READY but is mandatory before IN_PROGRESS |
