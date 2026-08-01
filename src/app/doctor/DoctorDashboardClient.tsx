@@ -13,6 +13,8 @@ import UserManagement from '@/components/doctor/UserManagement';
 import FinanceModule from '@/components/doctor/FinanceModule';
 import { useBooking } from '@/components/BookingContext';
 import { createClient } from '@/lib/supabase/client';
+import { reconcileDoctorAppointments } from '@/lib/appointments';
+import { routeSettingsSection } from '@/lib/doctorDashboard';
 import { SupabaseDoctor, SupabaseAppointment } from './page';
 
 interface DoctorDashboardClientProps {
@@ -87,17 +89,11 @@ export default function DoctorDashboardClient({ doctor, initialAppointments }: D
   };
 
   useEffect(() => {
-    const mapped = initialAppointments.map(appt => ({
-      id: appt.id,
-      patientName: appt.patient_name,
-      mobileNumber: appt.patient_phone,
-      date: appt.appointment_date,
-      timeSlot: appt.appointment_time,
-      status: appt.status as any,
-      price: appt.consultation_fee_at_booking ?? doctor.consultation_fee ?? 0,
-      createdAt: appt.created_at,
-    }));
-    setBookings(mapped);
+    setBookings(previous => reconcileDoctorAppointments(
+      previous,
+      initialAppointments,
+      doctor.consultation_fee ?? 0,
+    ));
     setIsLoadingAvailability(false);
   }, [initialAppointments, doctor.consultation_fee, setBookings, setIsLoadingAvailability]);
 
@@ -126,6 +122,7 @@ export default function DoctorDashboardClient({ doctor, initialAppointments }: D
   const showProfileSettings = clinicUser?.role === 'admin';
   const showSidebar = showSchedule || showProfileSettings;
   const canManageWeeklySchedule = clinicUser?.role === 'admin' || clinicUser?.role === 'supervisor';
+  const settingsSection = routeSettingsSection(activeSettingsTab);
 
   const settingsTabs = [
     ...(showSchedule ? [
@@ -347,8 +344,8 @@ export default function DoctorDashboardClient({ doctor, initialAppointments }: D
                       })}
                     </div>
 
-                    {showSchedule && <ScheduleBuilder activeSection={activeSettingsTab} />}
-                    {showProfileSettings && <ProfileSettings doctor={doctor} language={language} activeSection={activeSettingsTab} />}
+                    {showSchedule && <ScheduleBuilder activeSection={settingsSection.scheduleSection} />}
+                    {showProfileSettings && <ProfileSettings doctor={doctor} language={language} activeSection={settingsSection.profileSection} />}
                   </div>
                 )}
 

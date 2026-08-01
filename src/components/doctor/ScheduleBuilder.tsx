@@ -24,7 +24,7 @@ const REASONS_EN = [
 ];
 
 interface ScheduleBuilderProps {
-  activeSection?: 'schedule' | 'blocked';
+  activeSection?: 'schedule' | 'blocked' | null;
 }
 
 export default function ScheduleBuilder({ activeSection = 'schedule' }: ScheduleBuilderProps = {}) {

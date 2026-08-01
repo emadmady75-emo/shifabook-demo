@@ -11,6 +11,7 @@ import {
   EGYPTIAN_DEMO_PATIENTS
 } from '@/lib/demoData';
 import { formatDateOnly, parseDateOnlySafe, isAppointmentInFutureOrNow } from '@/lib/dates';
+import { cancelAppointmentInState, mapRefreshedDoctorAppointment } from '@/lib/appointments';
 
 export type { Facility, DoctorProfile, ScheduleConfig };
 
@@ -112,6 +113,8 @@ export interface PatientBooking {
   facilityAddress?: string;
   cancelled_by?: string | null;
   cancelled_at?: string | null;
+  confirmed_by?: string | null;
+  confirmed_at?: string | null;
   rescheduled_by?: string | null;
   rescheduled_at?: string | null;
   queue_code?: string | null;
@@ -745,7 +748,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         } else {
           console.log('Successfully saved schedule config to Supabase.');
           // Keep doctorProfile state in sync
-          setDoctorProfile(prev => prev ? {
+          setDoctorProfile(prev => ({
             ...prev,
             workingDays: newConfig.workingDays,
             startTime: newConfig.startTime,
@@ -753,7 +756,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             slotDurationMinutes: newConfig.slotDurationMinutes,
             capacityPerSlot: newConfig.capacityPerSlot,
             consultationFee: newConfig.pricePerAppointment
-          } : null);
+          }));
         }
       } catch (err) {
         console.error('Error in saveConfig:', err);
@@ -836,26 +839,15 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           .order('appointment_date', { ascending: true })
           .order('appointment_time', { ascending: true });
         if (!error && appts) {
-          const mapped = appts.map(appt => ({
-            id: appt.id,
-            patientName: appt.patient_name,
-            mobileNumber: appt.patient_phone,
-            date: appt.appointment_date,
-            timeSlot: appt.appointment_time,
-            status: appt.status as any,
-            price: appt.consultation_fee_at_booking ?? doctorProfile.consultationFee ?? 0,
-            createdAt: appt.created_at,
-            cancelled_by: appt.cancelled_by,
-            cancelled_at: appt.cancelled_at,
-            rescheduled_by: appt.rescheduled_by,
-            rescheduled_at: appt.rescheduled_at,
-            queue_code: appt.queue_code,
-            appointment_type: appt.appointment_type || 'regular',
-            parent_appointment_id: appt.parent_appointment_id || null,
-            facilityName: language === 'ar' ? selectedFacility.name : selectedFacility.nameEn,
-            facilityAddress: language === 'ar' ? selectedFacility.address : selectedFacility.addressEn,
-            facilityMapUrl: selectedFacility.mapUrl,
-          }));
+          const mapped = appts.map(appt => mapRefreshedDoctorAppointment(
+            appt,
+            doctorProfile.consultationFee ?? 0,
+            {
+              name: language === 'ar' ? selectedFacility.name : selectedFacility.nameEn,
+              address: language === 'ar' ? selectedFacility.address : selectedFacility.addressEn,
+              mapUrl: selectedFacility.mapUrl,
+            },
+          ));
           setBookings(mapped);
         }
       } catch (err) {
@@ -1714,13 +1706,15 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
     }
 
-    // Update local state directly for immediate feedback
-    setBookings(prev => prev.map(b => (b.id === targetId || b.id === bookingId) ? { 
-      ...b, 
-      status: 'cancelled' as const,
-      cancelled_by: clinicUser ? `${clinicUser.full_name} (${clinicUser.role})` : 'patient',
-      cancelled_at: new Date().toISOString()
-    } : b));
+    // Update local state directly for immediate feedback while retaining confirmation metadata.
+    const cancelledBy = clinicUser ? `${clinicUser.full_name} (${clinicUser.role})` : 'patient';
+    const cancelledAt = new Date().toISOString();
+    setBookings(prev => cancelAppointmentInState(
+      prev,
+      [targetId, bookingId],
+      cancelledBy,
+      cancelledAt,
+    ));
 
     localStorage.removeItem('shifabook_active_booking_details');
     setActiveBooking(null);
