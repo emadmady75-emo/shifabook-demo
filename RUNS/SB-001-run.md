@@ -68,7 +68,7 @@ The harness verified all four settings routes, Attendance Rate `50%` with a conf
 - Antigravity preflight remains `BLOCKED`; Antigravity was stopped and excluded from this execution. See `RUNS/SB-001-antigravity-preflight.md`.
 - No secrets, production data, production systems, paid credits, Always On execution, or Windows Terminal Sandbox were used.
 - Browser QA could not enter the authenticated doctor dashboard without prohibited credentials. No bypass route or production-like credential was introduced.
-- GitHub-hosted CI did not run on the approved task-branch push because the committed workflow triggers on `pull_request` or manual dispatch. Local commands match the committed workflow. The Vercel status attached to the pushed commit completed successfully.
+- Pull Request `#1` triggered GitHub-hosted CI. Run `30717625963` completed successfully, including the `project-gates` check. Vercel and Vercel Preview Comments checks also completed successfully.
 
 ## Rollback note
 
@@ -76,4 +76,4 @@ Revert the SB-001 implementation commit while preserving all earlier control-pla
 
 ## Delivery state
 
-Implementation, local quality/security gates, independent reviews, and local synthetic Browser QA/UAT: PASS. Product Owner approved pushing the task branch on `2026-08-01`; remote SHA verification passed and Vercel reported `Deployment has completed`. No PR, merge to `main`, or production release has been approved or performed.
+Implementation, local quality/security gates, independent reviews, local synthetic Browser QA/UAT, Vercel branch deployment, and GitHub PR CI: PASS. Pull Request `#1` is open, mergeable, and clean at `https://github.com/emadmady75-emo/shifabook-demo/pull/1`. No merge to `main` or production release has been approved or performed.
