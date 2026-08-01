@@ -3,6 +3,7 @@
 import React from 'react';
 import { useBooking, PatientBooking, WhatsAppEvent, getQueueCode, FollowUpOptions } from '../BookingContext';
 import { formatDateOnly, parseDateOnlySafe } from '@/lib/dates';
+import { getTodayAppointments } from '@/lib/appointments';
 import PatientPhoneLink from './PatientPhoneLink';
 
 export default function AppointmentsList() {
@@ -265,7 +266,7 @@ export default function AppointmentsList() {
   // 2. Count for Today's Appointments (Default Tab)
   const todayAppointmentsCount = React.useMemo(() => {
     const todayStr = formatDateOnly(new Date());
-    const active = bookings.filter(b => b.status !== 'cancelled' && b.date === todayStr);
+    const active = getTodayAppointments(bookings, todayStr);
     
     // Filter by role if accountant
     const filtered = active.filter(appt => {
@@ -295,7 +296,7 @@ export default function AppointmentsList() {
   const displayedAppointments = React.useMemo(() => {
     if (activeTab === 'today') {
       const todayStr = formatDateOnly(new Date());
-      const active = bookings.filter(b => b.status !== 'cancelled' && b.date === todayStr);
+      const active = getTodayAppointments(bookings, todayStr);
       
       // Filter by role if accountant
       const filtered = active.filter(appt => {

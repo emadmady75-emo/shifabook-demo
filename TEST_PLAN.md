@@ -13,4 +13,4 @@
 - Dependency tree proof: `npm ls next postcss sharp`
 - Secret scan: `npm run secrets:scan` using committed Secretlint configuration; no external source upload
 
-Task `SB-001` is `READY`, but execution remains prohibited until the Antigravity Project permission/Always On/overages preflight is verified and recorded. Until SB-001 is green, feature tasks remain blocked.
+Task `SB-001` is `IN_PROGRESS` under the recorded Hermes/X. bounded-execution decision. Antigravity is stopped and is not used in this run. Feature tasks remain blocked until every command above, independent quality/security reviews, and the delivery record are green.

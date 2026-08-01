@@ -9,7 +9,7 @@ import { useBooking } from '@/components/BookingContext';
 interface ProfileSettingsProps {
   doctor: SupabaseDoctor;
   language: 'ar' | 'en';
-  activeSection?: 'profile' | 'password';
+  activeSection?: 'profile' | 'password' | null;
 }
 
 export default function ProfileSettings({ doctor, language, activeSection = 'profile' }: ProfileSettingsProps) {
