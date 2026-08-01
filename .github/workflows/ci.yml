@@ -1,0 +1,15 @@
+name: CI
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  project-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Project-specific CI not configured
+        run: |
+          echo "Bootstrap placeholder: replace with TEST_PLAN.md commands before enabling as a required check."
+          exit 1
